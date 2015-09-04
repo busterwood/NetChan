@@ -34,6 +34,7 @@ namespace NetChan {
                         r.Wakeup();
                     }
                 }
+                Debug.Print("Thread {0}, {1} is now Closed", Thread.CurrentThread.ManagedThreadId, GetType());
             }
         }
 

@@ -108,5 +108,68 @@ namespace NetChan {
             Console.WriteLine("took {0}ms, {1:N1}op/ms, {2:N0}op/sec", elasped, opsms, opsms * 1000);
         }
 
+        [Test]
+        public void can_enumerate_channels_until_all_closed() {
+            var ch1 = new Channel<int>();
+            var ch2 = new Channel<bool>();
+            ThreadPool.QueueUserWorkItem(state => {
+                ch1.Send(123);
+                ch2.Send(true);
+                ch2.Close();
+                ch1.Send(124);
+                ch1.Close();
+            });
+            var select = new Select(ch1, ch2);
+            var en = select.GetEnumerator();
+            Assert.IsTrue(en.MoveNext());
+            Assert.AreEqual(0, en.Current);
+            Assert.AreEqual(123, select.Value);
+            
+            Assert.IsTrue(en.MoveNext());
+            Assert.AreEqual(1, en.Current);
+            Assert.AreEqual(true, select.Value);
+
+            Assert.IsTrue(en.MoveNext());
+            Assert.AreEqual(0, en.Current);
+            Assert.AreEqual(124, select.Value);
+
+            Assert.IsFalse(en.MoveNext());
+        }
+
+
+        [Test]
+        public void can_enumerate_queued_hcannels_until_all_closed() {
+            var ch1 = new QueuedChannel<int>(1);
+            var ch2 = new QueuedChannel<bool>(1);
+            ThreadPool.QueueUserWorkItem(state => {
+                ch1.Send(123);
+                ch1.Send(124);
+                ch1.Close();
+                ch2.Send(true);
+                ch2.Close();
+            });
+            var select = new Select(ch1, ch2);
+            var en = select.GetEnumerator();
+            Assert.IsTrue(en.MoveNext());
+            Assert.AreEqual(0, en.Current);
+            Assert.AreEqual(123, select.Value);
+
+            bool got124 = false, gotTrue = false;
+            for (int i = 0; i < 2; i++) {
+                Assert.IsTrue(en.MoveNext(), i.ToString() + " 124=" + got124 + ", true=" + gotTrue);
+                if (en.Current == 0) {
+                    Assert.IsFalse(got124);
+                    Assert.AreEqual(124, select.Value);
+                    got124 = true;
+                } else {
+                    Assert.IsFalse(gotTrue);
+                    Assert.AreEqual(true, select.Value);
+                    gotTrue = true;
+                }
+            }
+            Assert.IsFalse(en.MoveNext());
+
+        }
+
     }
 }

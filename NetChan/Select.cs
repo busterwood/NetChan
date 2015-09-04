@@ -5,7 +5,7 @@ using System.Diagnostics;
 using System.Threading;
 
 namespace NetChan {
-    public class Select {
+    public class Select : IEnumerable<int> {
         private readonly IUntypedReceiver[] Channels;
         private readonly int[] readOrder;
         private int index;
@@ -50,12 +50,15 @@ namespace NetChan {
                 var idx = readOrder[i];
                 switch (Channels[idx].RecvSelect(sync, out waiters[idx])) {
                     case RecvStatus.Closed:
+                        Debug.Print("Thread {0}, {1} Recv: RecvSelect channel {2} is closed", Thread.CurrentThread.ManagedThreadId, GetType(), idx);
                         break;
                     case RecvStatus.Read:
                         index = idx;
                         value = waiters[idx].Item.Value;
+                        Debug.Print("Thread {0}, {1} Recv: RecvSelect returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), value, index);
                         return index;
                     case RecvStatus.Waiting:
+                        Debug.Print("Thread {0}, {1} Recv: RecvSelect waiting index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), idx);
                         if (waiters[idx].Event == null) {
                             throw new InvalidOperationException("No wait handle");
                         }
@@ -110,6 +113,16 @@ namespace NetChan {
                 array[index] = array[i];
                 array[i] = tmp;
             }
+        }
+
+        public IEnumerator<int> GetEnumerator() {
+            while(Recv() >= 0) {
+                yield return index;
+            }
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() {
+            return GetEnumerator();
         }
     }
 }
