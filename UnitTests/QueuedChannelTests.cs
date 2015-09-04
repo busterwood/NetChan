@@ -83,7 +83,7 @@ namespace NetChan {
         }
 
         [Test]
-        public void can_enumerate_closed_cahnnel() {
+        public void can_enumerate_closed_channel() {
             var ch = new QueuedChannel<int>(1);
             ch.Close();
             var e = ch.GetEnumerator();
