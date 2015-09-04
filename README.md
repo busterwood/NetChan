@@ -15,7 +15,7 @@ Channels are also `Enumerable<T>`, so you can easily read all the items using a 
 
 Recieves over one of many channels is support via the `Select` class, which is a bit like a Go select statement.
 `Select` supports:
-* `Recv()` which may block if not sender is ready
+* `Recv()` which may block if no sender is ready
 * `TryRecv(T)` which does _not_ block and only recieves if a sender is ready
 
 `Select` is also  `Enumerable<int>`, which returns the index of the selected channel.  The enumeration will finish when all channels are closed.
