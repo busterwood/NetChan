@@ -72,7 +72,8 @@ namespace NetChan {
         public bool TrySend(T v) {
             lock (sync) {
                 if (closed) {
-                    throw new ClosedChannelException("You cannot send on a closed Channel");
+                    // don't throw an exception, we are just trying to send
+                    return false;
                 }
                 while (recq.Count > 0) {
                     Waiter<T> r = recq.Dequeue();

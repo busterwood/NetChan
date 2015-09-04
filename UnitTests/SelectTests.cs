@@ -2,6 +2,7 @@
 using System;
 using System.Diagnostics;
 using System.Threading;
+
 namespace NetChan {
 
     [TestFixture]
@@ -138,7 +139,7 @@ namespace NetChan {
 
 
         [Test]
-        public void can_enumerate_queued_hcannels_until_all_closed() {
+        public void can_enumerate_queued_channels_until_all_closed() {
             var ch1 = new QueuedChannel<int>(1);
             var ch2 = new QueuedChannel<bool>(1);
             ThreadPool.QueueUserWorkItem(state => {

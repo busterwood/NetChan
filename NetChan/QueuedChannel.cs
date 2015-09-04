@@ -96,9 +96,11 @@ namespace NetChan {
         public bool TrySend(T v) {
             lock (sync) {
                 if (closed) {
-                    throw new ClosedChannelException("You cannot send on a closed Channel");
+                    // you cannot send on a closed channel
+                    return false;
                 }
                 if (itemq.Count == capacity) {
+                    // queue is full and we don't want to wait
                     return false;
                 }
                 itemq.Enqueue(v);

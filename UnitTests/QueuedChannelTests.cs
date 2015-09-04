@@ -45,11 +45,11 @@ namespace NetChan {
             ch.Send(123);
         }
 
-        [Test, ExpectedException(typeof(ClosedChannelException))]
-        public void cannot_trysend_on_a_closed_Channel() {
+        [Test]
+        public void trysend_on_a_closed_Channel_returns_false() {
             var ch = new QueuedChannel<int>(1);
             ch.Close();
-            ch.TrySend(123);
+            Assert.IsFalse(ch.TrySend(123));
         }
 
         [Test]
