@@ -5,6 +5,8 @@ using System.Diagnostics;
 using System.Threading;
 
 namespace NetChan {
+    /// <summary>Select receives from one or more channels</summary>
+    /// <remarks>Enumerating a Select does blocking reads from all the channels until the all the channels are closed.</remarks>
     public class Select : IEnumerable<int> {
         private readonly IUntypedReceiver[] Channels;
         private readonly int[] readOrder;
@@ -20,10 +22,13 @@ namespace NetChan {
             }
         }
 
+        /// <summary>The index of the selected channel, or -1 if no channel has recieved.</summary>
         public int Index {
             get { return index; }
         }
 
+        /// <summary>The value that has been recieved.</summary>
+        /// <exception cref="InvalidOperationException">Thrown if no channel has been recieved, i.e. Index is -1</exception>
         public object Value {
             get {
                 if (index == -1) {
@@ -37,6 +42,8 @@ namespace NetChan {
             return (T)Value;
         }
 
+        /// <summary>Blocking, non-deterministic read of many channels</summary>
+        /// <returns>The index of the channel that was read, or -1 if no channels are ready to read</returns>
         public int Recv() {
             var waiters = new IWaiter[Channels.Length];
             var handles = new WaitHandle[Channels.Length];
@@ -46,24 +53,23 @@ namespace NetChan {
             index = -1;
             value = null;
             Shuffle(readOrder);
-            for (int i = 0; i < readOrder.Length; i++) {
-                var idx = readOrder[i];
-                switch (Channels[idx].RecvSelect(sync, out waiters[idx])) {
+            foreach (int i in readOrder) {
+                switch (Channels[i].RecvSelect(sync, out waiters[i])) {
                     case RecvStatus.Closed:
-                        Debug.Print("Thread {0}, {1} Recv: RecvSelect channel {2} is closed", Thread.CurrentThread.ManagedThreadId, GetType(), idx);
+                        Debug.Print("Thread {0}, {1} Recv: RecvSelect channel {2} is closed", Thread.CurrentThread.ManagedThreadId, GetType(), i);
                         break;
                     case RecvStatus.Read:
-                        index = idx;
-                        value = waiters[idx].Item.Value;
+                        index = i;
+                        value = waiters[i].Item.Value;
                         Debug.Print("Thread {0}, {1} Recv: RecvSelect returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), value, index);
                         return index;
                     case RecvStatus.Waiting:
-                        Debug.Print("Thread {0}, {1} Recv: RecvSelect waiting index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), idx);
-                        if (waiters[idx].Event == null) {
+                        Debug.Print("Thread {0}, {1} Recv: RecvSelect waiting index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
+                        if (waiters[i].Event == null) {
                             throw new InvalidOperationException("No wait handle");
                         }
-                        handles[handleCount] = waiters[idx].Event;
-                        handleIdx[handleCount] = idx;
+                        handles[handleCount] = waiters[i].Event;
+                        handleIdx[handleCount] = i;
                         handleCount++;
                         break;
                 }
@@ -101,9 +107,25 @@ namespace NetChan {
             }
         }
 
-        /// <summary>
-        /// Modern version of the Fisher-Yates shuffle
-        /// </summary>
+        /// <summary>Non-blocking, non-deterministic read of many channels</summary>
+        /// <returns>The index of the channel that was read, or -1 if no channels are ready to read</returns>
+        public int TryRecv() {
+            index = -1;
+            value = null;
+            Shuffle(readOrder);
+            foreach (int i in readOrder) {
+                var maybe = Channels[i].TryRecvSelect();
+                if (maybe.Present) {
+                    index = i;
+                    value = maybe.Value;
+                    Debug.Print("Thread {0}, {1} Recv: RecvSelect returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), value, index);
+                    break;
+                }
+            }
+            return index;
+        }
+
+        /// <summary>Modern version of the Fisher-Yates shuffle</summary>
         private static void Shuffle<T>(T[] array) {
             var r = new Random();
             for (int i = array.Length - 1; i > 0; i--) {
@@ -115,6 +137,7 @@ namespace NetChan {
             }
         }
 
+        /// <summary>Enumerating a Select does blocking reads from all the channels until the all the channels are closed.</summary>
         public IEnumerator<int> GetEnumerator() {
             while(Recv() >= 0) {
                 yield return index;

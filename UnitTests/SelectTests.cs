@@ -63,6 +63,44 @@ namespace NetChan {
         }
 
         [Test]
+        public void can_tryrecv_on_all_closed_Channels() {
+            var ch1 = new Channel<int>();
+            var ch2 = new Channel<bool>();
+            ch1.Close();
+            ch2.Close();
+            var select = new Select(ch1, ch2);
+            Assert.AreEqual(-1, select.TryRecv(), "index");
+        }
+
+        [Test]
+        public void tryrecv_returns_minus_one_if_no_channels_are_ready() {
+            var ch1 = new Channel<int>();
+            var ch2 = new QueuedChannel<bool>(1);
+            var select = new Select(ch1, ch2);
+            Assert.AreEqual(-1, select.TryRecv(), "index");
+        }
+
+        [Test]
+        public void tryrecv_returns_if_one_channel_is_ready() {
+            var ch1 = new Channel<int>();
+            var ch2 = new QueuedChannel<bool>(1);
+            ThreadPool.QueueUserWorkItem(state => ch1.Send(123));
+            Thread.Sleep(1);
+            var select = new Select(ch1, ch2);
+            Assert.AreEqual(0, select.TryRecv(), "index");
+        }
+
+        [Test]
+        public void tryrecv_returns_if_the_other_channel_is_ready() {
+            var ch1 = new Channel<int>();
+            var ch2 = new QueuedChannel<bool>(1);
+            ThreadPool.QueueUserWorkItem(state => ch2.Send(true));
+            Thread.Sleep(1);
+            var select = new Select(ch1, ch2);
+            Assert.AreEqual(1, select.TryRecv(), "index");
+        }
+
+        [Test]
         public void can_read_after_select_on_queued_Channels() {
             var ch1 = new QueuedChannel<int>(1);
             var ch2 = new QueuedChannel<bool>(1);
@@ -136,7 +174,6 @@ namespace NetChan {
 
             Assert.IsFalse(en.MoveNext());
         }
-
 
         [Test]
         public void can_enumerate_queued_channels_until_all_closed() {

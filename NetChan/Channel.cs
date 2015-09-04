@@ -176,6 +176,21 @@ namespace NetChan {
             return RecvStatus.Waiting;
         }
 
+        Maybe<object> IUntypedReceiver.TryRecvSelect() {
+            Waiter<T> s = null;
+            lock (sync) {
+                if (sendq.Count == 0) {
+                    Debug.Print("Thread {0}, {1} TryRecvSelect, itemq is empty", Thread.CurrentThread.ManagedThreadId, GetType());
+                    return Maybe<object>.None();
+                }
+                s = sendq.Dequeue();
+            }
+            Debug.Assert(s.Item.Present, "Sender item is absent");
+            var v = s.Item.Value;
+            Debug.Print("Thread {0}, {1} TryRecvSelect, removed {2} from itemq", Thread.CurrentThread.ManagedThreadId, GetType(), v);
+            return Maybe<object>.Some(v);
+        }
+
         void IUntypedReceiver.Release(IWaiter h) {
             WaiterPool<T>.Put((Waiter<T>)h);
         }
