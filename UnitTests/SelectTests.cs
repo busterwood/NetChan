@@ -195,13 +195,14 @@ namespace NetChan {
             bool got124 = false, gotTrue = false;
             for (int i = 0; i < 2; i++) {
                 Assert.IsTrue(en.MoveNext(), i.ToString() + " 124=" + got124 + ", true=" + gotTrue);
-                if (en.Current == 0) {
+                var kv = en.Current;
+                if (kv.Key == 0) {
                     Assert.IsFalse(got124);
-                    Assert.AreEqual(124, select.Value);
+                    Assert.AreEqual(124, kv.Value);
                     got124 = true;
                 } else {
                     Assert.IsFalse(gotTrue);
-                    Assert.AreEqual(true, select.Value);
+                    Assert.AreEqual(true, kv.Value);
                     gotTrue = true;
                 }
             }

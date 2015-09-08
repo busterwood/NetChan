@@ -7,7 +7,7 @@ using System.Threading;
 namespace NetChan {
     /// <summary>Select receives from one or more channels</summary>
     /// <remarks>Enumerating a Select does blocking reads from all the channels until the all the channels are closed.</remarks>
-    public class Select : IEnumerable<int> {
+    public class Select : IEnumerable<KeyValuePair<int, object>> {
         private readonly IUntypedReceiver[] Channels;
         private readonly int[] readOrder;
         private int index;
@@ -28,18 +28,13 @@ namespace NetChan {
         }
 
         /// <summary>The value that has been recieved.</summary>
-        /// <exception cref="InvalidOperationException">Thrown if no channel has been recieved, i.e. Index is -1</exception>
-        public object Value {
+        public Maybe<object> Value {
             get {
                 if (index == -1) {
-                    throw new InvalidOperationException("Nothing selected");
+                    return Maybe<object>.None("Recv not called");
                 }
-                return value;
+                return Maybe<object>.Some(value);
             }
-        }
-
-        public T AsValue<T>() {
-            return (T)Value;
         }
 
         /// <summary>Blocking, non-deterministic read of many channels</summary>
@@ -138,14 +133,15 @@ namespace NetChan {
         }
 
         /// <summary>Enumerating a Select does blocking reads from all the channels until the all the channels are closed.</summary>
-        public IEnumerator<int> GetEnumerator() {
+        public IEnumerator<KeyValuePair<int, object>> GetEnumerator() {
             while(Recv() >= 0) {
-                yield return index;
+                yield return new KeyValuePair<int,object>(index, value);
             }
         }
 
         IEnumerator IEnumerable.GetEnumerator() {
             return GetEnumerator();
         }
+
     }
 }
