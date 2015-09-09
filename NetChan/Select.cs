@@ -6,125 +6,102 @@ using System.Threading;
 
 namespace NetChan {
     /// <summary>Select receives from one or more channels</summary>
-    /// <remarks>Enumerating a Select does blocking reads from all the channels until the all the channels are closed.</remarks>
-    public class Select : IEnumerable<KeyValuePair<int, object>> {
-        private readonly IUntypedReceiver[] Channels;
+    public class Select {
+        private readonly Random rand = new Random(Environment.TickCount);
+        private readonly IUntypedReceiver[] chans;
         private readonly int[] readOrder;
-        private int index;
-        private object value;
 
         public Select(params IUntypedReceiver[] Channels) {
-            index = -1;
-            this.Channels = Channels;
+            this.chans = Channels;
             readOrder = new int[Channels.Length];
             for (int i = 0; i < readOrder.Length; i++) {
                 readOrder[i] = i;
             }
         }
 
-        /// <summary>The index of the selected channel, or -1 if no channel has recieved.</summary>
-        public int Index {
-            get { return index; }
-        }
-
-        /// <summary>The value that has been recieved.</summary>
-        public Maybe<object> Value {
-            get {
-                if (index == -1) {
-                    return Maybe<object>.None("Recv not called");
-                }
-                return Maybe<object>.Some(value);
-            }
+        /// <summary>Null channels block forever</summary>
+        /// <param name="idx">Index of the channel</param>
+        public void SetNull(int idx) {
+            chans[idx] = null;
         }
 
         /// <summary>Blocking, non-deterministic read of many channels</summary>
         /// <returns>The index of the channel that was read, or -1 if no channels are ready to read</returns>
-        public int Recv() {
-            var waiters = new IWaiter[Channels.Length];
-            var handles = new WaitHandle[Channels.Length];
-            var handleIdx = new int[Channels.Length];
+        public Selected Recv() {
+            var waiters = new IWaiter[chans.Length];
+            var handles = new WaitHandle[chans.Length];
+            var handleIdx = new int[chans.Length];
             var handleCount = 0;
             var sync = new Sync();
-            index = -1;
-            value = null;
             Shuffle(readOrder);
             foreach (int i in readOrder) {
-                switch (Channels[i].RecvSelect(sync, out waiters[i])) {
-                    case RecvStatus.Closed:
-                        Debug.Print("Thread {0}, {1} Recv: RecvSelect channel {2} is closed", Thread.CurrentThread.ManagedThreadId, GetType(), i);
-                        break;
-                    case RecvStatus.Read:
-                        index = i;
-                        value = waiters[i].Item.Value;
-                        Debug.Print("Thread {0}, {1} Recv: RecvSelect returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), value, index);
-                        return index;
-                    case RecvStatus.Waiting:
-                        Debug.Print("Thread {0}, {1} Recv: RecvSelect waiting index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
-                        if (waiters[i].Event == null) {
-                            throw new InvalidOperationException("No wait handle");
-                        }
-                        handles[handleCount] = waiters[i].Event;
-                        handleIdx[handleCount] = i;
-                        handleCount++;
-                        break;
-                }
-            }
-            // if all Channels are closed
-            if (handleCount == 0) {
-                return -1;
-            }
-            // some Channels might be closed
-            if (handleCount < Channels.Length) {
-                Array.Resize(ref handles, handleCount);
-            }
-            // loop because we might be woken up by a Channel closing
-            Debug.Print("Thread {0}, {1} Recv, there are {2} wait handles", Thread.CurrentThread.ManagedThreadId, GetType(), handles.Length);
-            for (; ; ) {
-                int signalled = WaitHandle.WaitAny(handles);
-                Debug.Print("Thread {0}, {1} Recv, woke up after WaitAny", Thread.CurrentThread.ManagedThreadId, GetType());
-                int sig = handleIdx[signalled];
-                var maybe = waiters[sig].Item;
-                if (!sync.Set || maybe.Absent) {
-                    // woken up by a closed Channel
-                    Debug.Print("Thread {0}, {1} Recv, sync {2}, maybe {3}", Thread.CurrentThread.ManagedThreadId, GetType(), sync.Set, maybe);
-                    handleCount--;
-                    if (handleCount == 0) {
-                        return -1;
-                    }
+                if (chans[i] == null) {
+                    Debug.Print("Thread {0}, {1} Recv: channel is null, index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
                     continue;
                 }
-                value = maybe.Value;
-                index = sig;
-                Debug.Print("Thread {0}, {1} Recv, sync Set, idx {2}, value {3}", Thread.CurrentThread.ManagedThreadId, GetType(), sig, value);
-                // only release the signalled Channel,the others will be releases as the Channel is read
-                Channels[sig].Release(waiters[sig]);
-                return index;
+                waiters[i] = chans[i].GetWaiter(sync);
+                if (chans[i].RecvSelect(waiters[i])) {
+                    Debug.Print("Thread {0}, {1} Recv: RecvSelect returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), waiters[i].Item, i);
+                    return new Selected(i, waiters[i].Item);
+                }
+                Debug.Print("Thread {0}, {1} Recv: RecvSelect waiting index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
+                if (waiters[i].Event == null) {
+                    throw new InvalidOperationException("No wait handle");
+                }
+                handles[handleCount] = waiters[i].Event;
+                handleIdx[handleCount] = i;
+                handleCount++;
             }
+            if (handleCount == 0) {
+                throw new InvalidOperationException("All channels are null, select will block forever");
+            }
+            // some Channels might be null
+            if (handleCount < chans.Length) {
+                Array.Resize(ref handles, handleCount);
+            }
+            Debug.Print("Thread {0}, {1} Recv, there are {2} wait handles", Thread.CurrentThread.ManagedThreadId, GetType(), handles.Length);
+            int signalled = WaitHandle.WaitAny(handles);
+            Debug.Print("Thread {0}, {1} Recv, woke up after WaitAny", Thread.CurrentThread.ManagedThreadId, GetType());
+            int sig = handleIdx[signalled];
+            var maybe = waiters[sig].Item;
+            Debug.Print("Thread {0}, {1} Recv, sync Set, idx {2}, value {3}", Thread.CurrentThread.ManagedThreadId, GetType(), sig, maybe);
+            // only release the signalled Channel,the others will be releases as the Channel is read
+            chans[sig].ReleaseWaiter(waiters[sig]);
+            return new Selected(sig, maybe);
         }
 
         /// <summary>Non-blocking, non-deterministic read of many channels</summary>
         /// <returns>The index of the channel that was read, or -1 if no channels are ready to read</returns>
-        public int TryRecv() {
-            index = -1;
-            value = null;
+        public Selected TryRecv() {
+            var waiters = new IWaiter[chans.Length];
             Shuffle(readOrder);
-            foreach (int i in readOrder) {
-                var maybe = Channels[i].TryRecvSelect();
-                if (maybe.Present) {
-                    index = i;
-                    value = maybe.Value;
-                    Debug.Print("Thread {0}, {1} Recv: RecvSelect returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), value, index);
-                    break;
+            try {
+                foreach (int i in readOrder) {
+                    if (chans[i] == null) {
+                        Debug.Print("Thread {0}, {1} Recv: channel is null, index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
+                        continue;
+                    }
+                    waiters[i] = chans[i].GetWaiter(null);
+                    if (chans[i].TryRecvSelect(waiters[i])) {
+                        Debug.Print("Thread {0}, {1} Recv: RecvSelect returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), waiters[i].Item, i);
+                        return new Selected(i, waiters[i].Item);
+                    }
+                }
+            } finally {
+                for (int i = 0; i < waiters.Length; i++) {
+                    if (waiters[i] == null) {
+                        continue;
+                    }
+                    chans[i].ReleaseWaiter(waiters[i]);
                 }
             }
-            return index;
+            return new Selected(-1, Maybe<object>.None());
         }
 
         /// <summary>Modern version of the Fisher-Yates shuffle</summary>
-        private static void Shuffle<T>(T[] array) {
-            var r = new Random();
-            for (int i = array.Length - 1; i > 0; i--) {
-                int index = r.Next(i);
+        private void Shuffle<T>(T[] array) {
+            for (int i = array.Length-1; i > 0; i--) {
+                int index = rand.Next(i);
                 // swap the values
                 var tmp = array[index];
                 array[index] = array[i];
@@ -132,16 +109,15 @@ namespace NetChan {
             }
         }
 
-        /// <summary>Enumerating a Select does blocking reads from all the channels until the all the channels are closed.</summary>
-        public IEnumerator<KeyValuePair<int, object>> GetEnumerator() {
-            while(Recv() >= 0) {
-                yield return new KeyValuePair<int,object>(index, value);
-            }
-        }
+    }
 
-        IEnumerator IEnumerable.GetEnumerator() {
-            return GetEnumerator();
-        }
+    public struct Selected {
+        public readonly int Index;
+        public readonly object Value;
 
+        public Selected(int idx, object value) {
+            Index = idx;
+            Value = value;
+        }
     }
 }

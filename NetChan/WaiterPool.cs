@@ -6,9 +6,7 @@ using System.Runtime.Serialization;
 using System.Threading;
 
 namespace NetChan {
-    /// <summary>
-    /// Thread static pool of Waiters for type {T }
-    /// </summary>
+    /// <summary>Thread static pool of Waiters for type {T}</summary>
     /// <remarks>
     /// This massively reduces the garbage created when processing lots of messages, which in turn means higher throughput
     /// </remarks>

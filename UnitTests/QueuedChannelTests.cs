@@ -22,14 +22,14 @@ namespace NetChan {
         [Test]
         public void tryRecv_returns_absent_value_if_no_senders() {
             var ch = new QueuedChannel<bool>(1);
-            Assert.IsTrue(ch.TryRecv().Absent);
+            Assert.IsTrue(ch.TryRecv().IsNone);
         }
 
         [Test]
         public void recv_get_value_sent_by_thread_pool_thread() {
             var ch = new QueuedChannel<int>(1);
             ThreadPool.QueueUserWorkItem(state => ch.Send(123));
-            Assert.AreEqual(123, ch.Recv());
+            Assert.AreEqual(Maybe<int>.Some(123), ch.Recv());
         }
 
         [Test]
@@ -63,7 +63,7 @@ namespace NetChan {
         public void recv_does_not_block_on_a_closed_Channel() {
             var ch = new QueuedChannel<int>(1);
             ch.Close();
-            Assert.AreEqual(0, ch.Recv());
+            Assert.AreEqual(Maybe<int>.None(), ch.Recv());
         }
 
         [Test]
@@ -78,7 +78,7 @@ namespace NetChan {
         public void can_recv_one_item_before_closing() {
             var ch = new QueuedChannel<int>(1);
             ThreadPool.QueueUserWorkItem(state => { ch.Send(123); ch.Close(); });
-            Assert.AreEqual(123, ch.Recv());
+            Assert.AreEqual(Maybe<int>.Some(123), ch.Recv());
             Assert.AreEqual(Maybe<int>.None("closed"), ch.TryRecv());
         }
 
@@ -144,7 +144,7 @@ namespace NetChan {
                 }
             });
             for (int i = 0; i < runs; i++) {
-                Assert.AreEqual(i, data.Recv());
+                Assert.AreEqual(Maybe<int>.Some(i), data.Recv());
             }
             var elasped = Environment.TickCount - start;
             var opsms = (float)runs / (float)elasped;

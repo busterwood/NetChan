@@ -35,14 +35,14 @@ namespace NetChan {
         [Test, Timeout(100)]
         public void tryRecv_returns_absent_value_if_no_senders() {
             var ch = new Channel<bool>();
-            Assert.IsTrue(ch.TryRecv().Absent);
+            Assert.IsTrue(ch.TryRecv().IsNone);
         }
 
         [Test, Timeout(100)]
         public void recv_get_value_sent_by_thread_pool_thread() {
             var ch = new Channel<int>();
             ThreadPool.QueueUserWorkItem(state => ch.Send(123));
-            Assert.AreEqual(123, ch.Recv());
+            Assert.AreEqual(Maybe<int>.Some(123), ch.Recv());
         }
 
         [Test]
@@ -76,7 +76,7 @@ namespace NetChan {
         public void recv_does_not_block_on_a_closed_Channel() {
             var ch = new Channel<int>();
             ch.Close();
-            Assert.AreEqual(0, ch.Recv());
+            Assert.AreEqual(Maybe<int>.None(), ch.Recv());
         }
 
         [Test, Timeout(100)]
@@ -91,7 +91,7 @@ namespace NetChan {
         public void can_recv_one_item_before_closing() {
             var ch = new Channel<int>();
             ThreadPool.QueueUserWorkItem(state => { ch.Send(123); ch.Close(); });
-            Assert.AreEqual(123, ch.Recv());
+            Assert.AreEqual(Maybe<int>.Some(123), ch.Recv());
             Assert.AreEqual(Maybe<int>.None("closed"), ch.TryRecv());
         }
 
@@ -131,9 +131,9 @@ namespace NetChan {
             var quit = new Channel<bool>();
             ThreadPool.QueueUserWorkItem(state => data.Send(123));
             var select = new Select(data, quit);
-            select.Recv();
-            Assert.AreEqual(0, select.Index);
-            Assert.AreEqual(123, select.Value);
+            var got = select.Recv();
+            Assert.AreEqual(0, got.Index);
+            Assert.AreEqual(123, got.Value);
         }
 
         [Test]
@@ -142,9 +142,9 @@ namespace NetChan {
             var quit = new Channel<bool>();
             ThreadPool.QueueUserWorkItem(state => quit.Send(true));
             var select = new Select(data, quit);
-            select.Recv();
-            Assert.AreEqual(1, select.Index);
-            Assert.AreEqual(true, select.Value);
+            var got = select.Recv();
+            Assert.AreEqual(1, got.Index);
+            Assert.AreEqual(true, got.Value);
         }
 
         [Test]
@@ -158,7 +158,7 @@ namespace NetChan {
                 }
             });
             for (int i = 0; i < runs; i++) {
-                Assert.AreEqual(i, data.Recv());
+                Assert.AreEqual(Maybe<int>.Some(i), data.Recv());
             }
             var elasped = Environment.TickCount - start;
             var opsms = (float)runs / (float)elasped;

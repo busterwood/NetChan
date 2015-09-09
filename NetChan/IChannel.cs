@@ -14,11 +14,13 @@ namespace NetChan {
         bool TrySend(T v);
 
         /// <summary>Recieve a value, blocks if needed</summary>
-        T Recv();
+        /// <remarks>returns <see cref="Maybe{T}.None()"/> if the channel is closed</remarks>
+        Maybe<T> Recv();
 
         /// <summary>
-        /// Recieve a value, returns <see cref="Maybe{T}.Some(T)"/> if recieved, otherwise returns <see cref="Maybe{T}.None()"/> if would have to block
+        /// Recieve a value, returns <see cref="Maybe{T}.Some(T)"/> if a value is availble
         /// </summary>
+        /// <remarks>returns <see cref="Maybe{T}.None()"/> if would have to block or if the channel is closed</remarks>
         Maybe<T> TryRecv();
     }
 }

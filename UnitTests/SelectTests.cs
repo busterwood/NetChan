@@ -17,13 +17,14 @@ namespace NetChan {
                 ch1.Send(124);
             });
             var select = new Select(ch1, ch2);
-            select.Recv();
-            Assert.AreEqual(0, select.Index, "select.Index");
-            Assert.AreEqual(123, select.Value, "select.Value");
-            Assert.AreEqual(true, ch2.Recv());
-            Assert.AreEqual(124, ch1.Recv());
+            var got = select.Recv();
+            Assert.AreEqual(0, got.Index, "select.Index");
+            Assert.AreEqual(123, got.Value, "select.Value");
+            Assert.AreEqual(Maybe<bool>.Some(true), ch2.Recv());
+            Assert.AreEqual(Maybe<int>.Some(124), ch1.Recv());
         }
 
+        //[Test, Timeout(100)]
         [Test]
         public void can_select_on_open_and_closed_Channels() {
             var ch1 = new Channel<int>();
@@ -33,9 +34,18 @@ namespace NetChan {
                 ch2.Send(true);
             });
             var select = new Select(ch1, ch2);
-            select.Recv();
-            Assert.AreEqual(1, select.Index, "select.Index");
-            Assert.AreEqual(true, select.Value, "select.Value");
+            var gotTrue = false;
+            while (!gotTrue) {
+                var got = select.Recv();
+                if (got.Index == 1) {
+                    Assert.AreEqual(true, got.Value);
+                    Assert.AreEqual(false, gotTrue);
+                    gotTrue = true;
+                } else {
+                    Assert.AreEqual(0, got.Index, "select.Index");
+                    Assert.AreEqual(null, got.Value, "select.Value");
+                }
+            }
         }
 
         [Test]
@@ -47,8 +57,9 @@ namespace NetChan {
                 ch2.Close();
             });
             var select = new Select(ch1, ch2);
-            select.Recv();
-            Assert.AreEqual(-1, select.Index, "select.Index");
+            var got = select.Recv();
+            Assert.AreNotEqual(-1, got.Index, "expected any channel to return");
+            Assert.AreEqual(null, got.Value);
         }
 
         [Test]
@@ -58,8 +69,9 @@ namespace NetChan {
             ch1.Close();
             ch2.Close();
             var select = new Select(ch1, ch2);
-            select.Recv();
-            Assert.AreEqual(-1, select.Index, "select.Index");
+            var got = select.Recv();
+            Assert.AreNotEqual(-1, got.Index, "expected any channel to return");
+            Assert.AreEqual(null, got.Value);
         }
 
         [Test]
@@ -69,7 +81,8 @@ namespace NetChan {
             ch1.Close();
             ch2.Close();
             var select = new Select(ch1, ch2);
-            Assert.AreEqual(-1, select.TryRecv(), "index");
+            var got = select.TryRecv();
+            Assert.AreEqual(-1, got.Index, "index");
         }
 
         [Test]
@@ -77,7 +90,8 @@ namespace NetChan {
             var ch1 = new Channel<int>();
             var ch2 = new QueuedChannel<bool>(1);
             var select = new Select(ch1, ch2);
-            Assert.AreEqual(-1, select.TryRecv(), "index");
+            var got = select.TryRecv();
+            Assert.AreEqual(-1, got.Index, "index");
         }
 
         [Test]
@@ -87,7 +101,8 @@ namespace NetChan {
             ThreadPool.QueueUserWorkItem(state => ch1.Send(123));
             Thread.Sleep(1);
             var select = new Select(ch1, ch2);
-            Assert.AreEqual(0, select.TryRecv(), "index");
+            var got = select.TryRecv();
+            Assert.AreEqual(0, got.Index, "index");
         }
 
         [Test]
@@ -97,7 +112,8 @@ namespace NetChan {
             ThreadPool.QueueUserWorkItem(state => ch2.Send(true));
             Thread.Sleep(1);
             var select = new Select(ch1, ch2);
-            Assert.AreEqual(1, select.TryRecv(), "index");
+            var got = select.TryRecv();
+            Assert.AreEqual(1, got.Index, "index");
         }
 
         [Test]
@@ -112,19 +128,19 @@ namespace NetChan {
                 ch1.Close();
             });
             var select = new Select(ch1, ch2);
-            select.Recv();
-            Debug.Print("select.Index = " + select.Index);
-            if (select.Index == 0) {
-                Assert.AreEqual(123, select.Value, "select.Value");
-                Assert.AreEqual(true, ch2.Recv());
+            var got = select.Recv();
+            Debug.Print("got.Index = " + got.Index);
+            if (got.Index == 0) {
+                Assert.AreEqual(123, got.Value, "got.Value");
+                Assert.AreEqual(Maybe<bool>.Some(true), ch2.Recv());
             } else {
-                Assert.AreEqual(1, select.Index, "select.Index");
-                Assert.AreEqual(true, select.Value, "select.Value");
-                Assert.AreEqual(123, ch1.Recv());
+                Assert.AreEqual(1, got.Index, "got.Index");
+                Assert.AreEqual(true, got.Value, "got.Value");
+                Assert.AreEqual(Maybe<int>.Some(123), ch1.Recv());
             }
-            select.Recv();
-            Assert.AreEqual(0, select.Index, "select.Index, value =" + select.Value);
-            Assert.AreEqual(124, select.Value, "select.Value");
+            got = select.Recv();
+            Assert.AreEqual(0, got.Index, "got.Index, value =" + got.Value);
+            Assert.AreEqual(124, got.Value, "got.Value");
         }
 
         [Test]
@@ -139,8 +155,9 @@ namespace NetChan {
             });
             var select = new Select(data);
             for (int i = 0; i < runs; i++) {
-                Assert.AreEqual(0, select.Recv());
-                Assert.AreEqual(i, select.Value);
+                var got = select.Recv();
+                Assert.AreEqual(0, got.Index);
+                Assert.AreEqual(i, got.Value);
             }
             var elasped = Environment.TickCount - start;
             var opsms = (float)runs / (float)elasped;
@@ -148,67 +165,14 @@ namespace NetChan {
         }
 
         [Test]
-        public void can_enumerate_channels_until_all_closed() {
-            var ch1 = new Channel<int>();
-            var ch2 = new Channel<bool>();
-            ThreadPool.QueueUserWorkItem(state => {
-                ch1.Send(123);
-                ch2.Send(true);
-                ch2.Close();
-                ch1.Send(124);
-                ch1.Close();
-            });
-            var select = new Select(ch1, ch2);
-            var en = select.GetEnumerator();
-            Assert.IsTrue(en.MoveNext());
-            Assert.AreEqual(0, en.Current);
-            Assert.AreEqual(123, select.Value);
-            
-            Assert.IsTrue(en.MoveNext());
-            Assert.AreEqual(1, en.Current);
-            Assert.AreEqual(true, select.Value);
-
-            Assert.IsTrue(en.MoveNext());
-            Assert.AreEqual(0, en.Current);
-            Assert.AreEqual(124, select.Value);
-
-            Assert.IsFalse(en.MoveNext());
-        }
-
-        [Test]
-        public void can_enumerate_queued_channels_until_all_closed() {
+        public void select_on_closed_channel_does_not_block_and_returns_no_value() {
             var ch1 = new QueuedChannel<int>(1);
-            var ch2 = new QueuedChannel<bool>(1);
-            ThreadPool.QueueUserWorkItem(state => {
-                ch1.Send(123);
-                ch1.Send(124);
-                ch1.Close();
-                ch2.Send(true);
-                ch2.Close();
-            });
-            var select = new Select(ch1, ch2);
-            var en = select.GetEnumerator();
-            Assert.IsTrue(en.MoveNext());
-            Assert.AreEqual(0, en.Current);
-            Assert.AreEqual(123, select.Value);
-
-            bool got124 = false, gotTrue = false;
-            for (int i = 0; i < 2; i++) {
-                Assert.IsTrue(en.MoveNext(), i.ToString() + " 124=" + got124 + ", true=" + gotTrue);
-                var kv = en.Current;
-                if (kv.Key == 0) {
-                    Assert.IsFalse(got124);
-                    Assert.AreEqual(124, kv.Value);
-                    got124 = true;
-                } else {
-                    Assert.IsFalse(gotTrue);
-                    Assert.AreEqual(true, kv.Value);
-                    gotTrue = true;
-                }
-            }
-            Assert.IsFalse(en.MoveNext());
-
+            ch1.Close();
+            var select = new Select(ch1);
+            var got = select.Recv();
+            Assert.AreEqual(0, got.Index);
+            Assert.AreEqual(null, got.Value);
         }
-
+        
     }
 }

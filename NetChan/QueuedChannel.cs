@@ -45,6 +45,9 @@ namespace NetChan {
                     // wait up the waiting recievers
                     Debug.Print("Thread {0}, {1} Close is waking {2} waiting receivers", Thread.CurrentThread.ManagedThreadId, GetType(), recq.Count);
                     foreach (var r in recq) {
+                        if (r.Sync != null) {
+                            r.Sync.Set = true;
+                        }
                         r.Wakeup();
                     }
                 }
@@ -116,15 +119,9 @@ namespace NetChan {
             return true;
         }
 
-        public T Recv() {
-            var maybe = BlockingRecv();
-            return maybe.Value;
-        }
-
-        /// <summary>
-        /// Returns an item, blocking if non ready, until a Channel is closed
-        /// </summary>
-        public Maybe<T> BlockingRecv() {
+        /// <summary>Returns an item, blocking if not ready</summary>
+        /// <remarks>returns <see cref="Maybe{T}.None()"/> without blocking if the channel is closed</remarks>
+        public Maybe<T> Recv() {
             Waiter<T> r;
             lock (sync) {
                 MoveSendQToItemQ();
@@ -161,6 +158,7 @@ namespace NetChan {
             }
         }
 
+        /// <remarks>returns <see cref="Maybe{T}.None()"/> if would have to block or if the channel is closed</remarks>
         public Maybe<T> TryRecv() {
             lock (sync) {
                 MoveSendQToItemQ();
@@ -175,8 +173,8 @@ namespace NetChan {
 
         public IEnumerator<T> GetEnumerator() {
             for (; ; ) {
-                var maybe = BlockingRecv();
-                if (maybe.Absent) {
+                var maybe = Recv();
+                if (maybe.IsNone) {
                     yield break; // Channel has been closed
                 }
                 yield return maybe.Value;
@@ -191,51 +189,55 @@ namespace NetChan {
             Close();
         }
 
+        /// <summary>Gets a waiter for use in RecvSelect</summary>
+        IWaiter IUntypedReceiver.GetWaiter(Sync s) {
+            var w = WaiterPool<T>.Get();
+            w.Sync = s;
+            return w;
+        }
+
         /// <summary>
-        /// Try to receive and value and write it to h, if it can be recieved straight away then it returns <see cref="RecvStatus.Read"/>.
-        /// If the channel is closed it returns <see cref="RecvStatus.Closed"/>.
-        /// If it has to wait it registers a reciever and returns <see cref="RecvStatus.Waiting"/>.
+        /// Try to receive and value and write it <paramref name="w"/>. If it can be recieved straight away then it returns TRUE, 
+        /// else registers a waiting reciever and returns FALSE.
         /// </summary>
-        /// <param name="sync">a object used to ensure only one channel writes a value as part of the select</param>
-        RecvStatus IUntypedReceiver.RecvSelect(Sync selSync, out IWaiter outr) {
-            var r = WaiterPool<T>.Get();
-            outr = r;
+        bool IUntypedReceiver.RecvSelect(IWaiter w) {
+            var r = (Waiter<T>)w;
             lock (sync) {
                 MoveSendQToItemQ();
                 while (itemq.Count > 0) {
-                    r.Sync = selSync;
                     if (r.SetItem(itemq.Peek())) {
                         itemq.Dequeue();
                         Debug.Print("Thread {0}, {1} RecvSelect, removed {2} from itemq", Thread.CurrentThread.ManagedThreadId, GetType(), r.Item);
                         MoveSendQToItemQ();
-                        return RecvStatus.Read;
+                        return true;
                     }
                 }
                 if (closed) {
-                    return RecvStatus.Closed;
+                    return true;
                 }
-                r.Sync = selSync;
                 recq.Enqueue(r);
             }
-            return RecvStatus.Waiting;
+            return false;
         }
 
         /// <summary>Try to receive without blocking</summary>
-        Maybe<object> IUntypedReceiver.TryRecvSelect() {
+        bool IUntypedReceiver.TryRecvSelect(IWaiter w) {
+            var r = (Waiter<T>)w;
             lock (sync) {
                 MoveSendQToItemQ();
                 if (itemq.Count == 0) {
                     Debug.Print("Thread {0}, {1} TryRecvSelect, itemq is empty", Thread.CurrentThread.ManagedThreadId, GetType());
-                    return Maybe<object>.None();
+                    return false;
                 }
                 var v = itemq.Dequeue();
                 Debug.Print("Thread {0}, {1} TryRecvSelect, removed {2} from itemq", Thread.CurrentThread.ManagedThreadId, GetType(), v);
                 MoveSendQToItemQ();
-                return Maybe<object>.Some(v);
+                r.SetItem(v);
+                return true;
             }
         }
 
-        void IUntypedReceiver.Release(IWaiter h) {
+        void IUntypedReceiver.ReleaseWaiter(IWaiter h) {
             WaiterPool<T>.Put((Waiter<T>)h);
         }
         

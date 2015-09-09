@@ -5,22 +5,18 @@ using System.Text;
 namespace NetChan {
     public interface IUntypedReceiver {
         /// <summary>
-        /// Try to receive and value and write it to h, if it can be recieved straight away then it returns <see cref="RecvStatus.Read"/>.
-        /// If the channel is closed it returns <see cref="RecvStatus.Closed"/>.
-        /// If it has to wait it registers a reciever and returns <see cref="RecvStatus.Waiting"/>.
+        /// Try to receive and value and write it <paramref name="w"/>. If it can be recieved straight away then it returns TRUE, 
+        /// else registers a waiting reciever and returns FALSE.
         /// </summary>
-        /// <param name="sync">a object used to ensure only one channel writes a value as part of the select</param>
-        RecvStatus RecvSelect(Sync sync, out IWaiter h);
+        bool RecvSelect(IWaiter w);
 
         /// <summary>Try to receive without blocking</summary>
-        Maybe<object> TryRecvSelect();
+        bool TryRecvSelect(IWaiter w);
 
-        void Release(IWaiter h);
-    }
+        /// <summary>Gets a waiter for use in RecvSelect</summary>
+        IWaiter GetWaiter(Sync sync);
 
-    public enum RecvStatus {
-        Closed,
-        Read,
-        Waiting,
+        /// <summary>Releases the waiter after use</summary>
+        void ReleaseWaiter(IWaiter w);
     }
 }

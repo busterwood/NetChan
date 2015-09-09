@@ -29,14 +29,6 @@ namespace NetChan {
             Event.Set();
         }
 
-        Maybe<object> IWaiter.Item {
-            get { return Item.Present ? Maybe<object>.Some(Item.Value) : Maybe<object>.None(Item.Reason); }
-        }
-
-        AutoResetEvent IWaiter.Event {
-            get { return Event; }
-        }
-
         public Maybe<T> Item {
             get { return item; }
         }
@@ -62,11 +54,26 @@ namespace NetChan {
             Sync = null;
             item = Maybe<T>.None();
         }
+
+        object IWaiter.Item {
+            get { return Item.IsSome ? (object)Item.Value : null; }
+        }
+
+        AutoResetEvent IWaiter.Event {
+            get { return Event; }
+        }
+
+
+        bool IWaiter.SetItem(object v) {
+            return SetItem((T)v);
+        }
+
     }
 
     public interface IWaiter {
-        Maybe<object> Item { get; }
+        object Item { get; }
         AutoResetEvent Event { get; }
+        bool SetItem(object v);
     }
 
     public class Sync {
