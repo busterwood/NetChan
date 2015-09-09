@@ -55,9 +55,7 @@ namespace NetChan {
             }
         }
 
-        /// <summary>
-        /// Send a value, adds it to the item queue or blocks until the queue is no longer full
-        /// </summary>
+        /// <summary>Send a value, adds it to the item queue or blocks until the queue is no longer full</summary>
         public void Send(T v) {
             Waiter<T> s = null;
             lock (sync) {

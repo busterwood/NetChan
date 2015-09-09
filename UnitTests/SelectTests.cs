@@ -24,8 +24,7 @@ namespace NetChan {
             Assert.AreEqual(Maybe<int>.Some(124), ch1.Recv());
         }
 
-        //[Test, Timeout(100)]
-        [Test]
+        [Test, Timeout(100)]
         public void can_select_on_open_and_closed_Channels() {
             var ch1 = new Channel<int>();
             var ch2 = new Channel<bool>();
@@ -173,6 +172,18 @@ namespace NetChan {
             Assert.AreEqual(0, got.Index);
             Assert.AreEqual(null, got.Value);
         }
-        
+
+        [Test]
+        public void select_on_one_null_channel() {
+            var ch1 = new Channel<int>();
+            var ch2 = new QueuedChannel<bool>(2);
+            ch2.Send(true);
+            var select = new Select(ch1, ch2);
+            select.SetNull(0);
+            var got = select.Recv();
+            Assert.AreEqual(1, got.Index, "expected any channel to return");
+            Assert.AreEqual(true, got.Value);
+        }
+
     }
 }

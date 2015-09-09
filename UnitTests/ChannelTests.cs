@@ -149,7 +149,7 @@ namespace NetChan {
 
         [Test]
         public void z_benchmark_send_and_recieve() {
-            const int runs = (int)1e5;
+            const int runs = (int)5e4;
             var start = Environment.TickCount;
             var data = new Channel<int>();
             ThreadPool.QueueUserWorkItem(state => {
