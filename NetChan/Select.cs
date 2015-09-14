@@ -6,41 +6,34 @@ using System.Threading;
 
 namespace NetChan {
     /// <summary>Select receives from one or more channels</summary>
-    public class Select {
+    public class Select : List<IUntypedReceiver> {
         private readonly Random rand = new Random(Environment.TickCount);
-        private readonly IUntypedReceiver[] chans;
         private readonly int[] readOrder;
 
-        public Select(params IUntypedReceiver[] Channels) {
-            this.chans = Channels;
-            readOrder = new int[Channels.Length];
+        public Select(params IUntypedReceiver[] chans)
+            : base(chans) {
+            readOrder = new int[Count];
             for (int i = 0; i < readOrder.Length; i++) {
                 readOrder[i] = i;
             }
         }
 
-        /// <summary>Null channels block forever</summary>
-        /// <param name="idx">Index of the channel</param>
-        public void SetNull(int idx) {
-            chans[idx] = null;
-        }
-
         /// <summary>Blocking, non-deterministic read of many channels</summary>
         /// <returns>The index of the channel that was read, or -1 if no channels are ready to read</returns>
         public Selected Recv() {
-            var waiters = new IWaiter[chans.Length];
-            var handles = new WaitHandle[chans.Length];
-            var handleIdx = new int[chans.Length];
+            var waiters = new IWaiter[Count];
+            var handles = new WaitHandle[Count];
+            var handleIdx = new int[Count];
             var handleCount = 0;
             var sync = new Sync();
             Shuffle(readOrder);
             foreach (int i in readOrder) {
-                if (chans[i] == null) {
+                if (this[i] == null) {
                     Debug.Print("Thread {0}, {1} Recv: channel is null, index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
                     continue;
                 }
-                waiters[i] = chans[i].GetWaiter(sync);
-                if (chans[i].RecvSelect(waiters[i])) {
+                waiters[i] = this[i].GetWaiter(sync);
+                if (this[i].RecvSelect(waiters[i])) {
                     Debug.Print("Thread {0}, {1} Recv: RecvSelect returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), waiters[i].Item, i);
                     return new Selected(i, waiters[i].Item);
                 }
@@ -56,7 +49,7 @@ namespace NetChan {
                 throw new InvalidOperationException("All channels are null, select will block forever");
             }
             // some Channels might be null
-            if (handleCount < chans.Length) {
+            if (handleCount < Count) {
                 Array.Resize(ref handles, handleCount);
             }
             Debug.Print("Thread {0}, {1} Recv, there are {2} wait handles", Thread.CurrentThread.ManagedThreadId, GetType(), handles.Length);
@@ -66,23 +59,23 @@ namespace NetChan {
             var maybe = waiters[sig].Item;
             Debug.Print("Thread {0}, {1} Recv, sync Set, idx {2}, value {3}", Thread.CurrentThread.ManagedThreadId, GetType(), sig, maybe);
             // only release the signalled Channel,the others will be releases as the Channel is read
-            chans[sig].ReleaseWaiter(waiters[sig]);
+            this[sig].ReleaseWaiter(waiters[sig]);
             return new Selected(sig, maybe);
         }
 
         /// <summary>Non-blocking, non-deterministic read of many channels</summary>
         /// <returns>The index of the channel that was read, or -1 if no channels are ready to read</returns>
         public Selected TryRecv() {
-            var waiters = new IWaiter[chans.Length];
+            var waiters = new IWaiter[Count];
             Shuffle(readOrder);
             try {
                 foreach (int i in readOrder) {
-                    if (chans[i] == null) {
+                    if (this[i] == null) {
                         Debug.Print("Thread {0}, {1} Recv: channel is null, index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
                         continue;
                     }
-                    waiters[i] = chans[i].GetWaiter(null);
-                    if (chans[i].TryRecvSelect(waiters[i])) {
+                    waiters[i] = this[i].GetWaiter(null);
+                    if (this[i].TryRecvSelect(waiters[i])) {
                         Debug.Print("Thread {0}, {1} Recv: RecvSelect returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), waiters[i].Item, i);
                         return new Selected(i, waiters[i].Item);
                     }
@@ -92,7 +85,7 @@ namespace NetChan {
                     if (waiters[i] == null) {
                         continue;
                     }
-                    chans[i].ReleaseWaiter(waiters[i]);
+                    this[i].ReleaseWaiter(waiters[i]);
                 }
             }
             return new Selected(-1, Maybe<object>.None());
@@ -108,8 +101,9 @@ namespace NetChan {
                 array[i] = tmp;
             }
         }
-
+   
     }
+
 
     public struct Selected {
         public readonly int Index;

@@ -179,7 +179,7 @@ namespace NetChan {
             var ch2 = new QueuedChannel<bool>(2);
             ch2.Send(true);
             var select = new Select(ch1, ch2);
-            select.SetNull(0);
+            select[0] = null;
             var got = select.Recv();
             Assert.AreEqual(1, got.Index, "expected any channel to return");
             Assert.AreEqual(true, got.Value);
