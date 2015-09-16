@@ -17,5 +17,3 @@ Recieves over one of many channels is support via the `Select` class, which is a
 `Select` supports:
 * `Recv()` which may block if no sender is ready
 * `TryRecv(T)` which does _not_ block and only recieves if a sender is ready
-
-`Select` is also  `Enumerable<int>`, which returns the index of the selected channel.  The enumeration will finish when all channels are closed.
