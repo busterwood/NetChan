@@ -1,3 +1,4 @@
+// Copyright the Netchan authors, see LICENSE.txt for permitted use
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -16,7 +17,7 @@ namespace NetChan {
 
         public static Waiter<T> Get(T v) {
             Waiter<T> s = Get();
-            s.SetItem(v);
+            s.Item = Maybe<T>.Some(v);
             return s;
         }
 

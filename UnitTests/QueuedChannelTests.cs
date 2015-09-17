@@ -1,4 +1,5 @@
-﻿using NUnit.Framework;
+﻿using System.Diagnostics;
+using NUnit.Framework;
 using System;
 using System.Threading;
 namespace NetChan {
@@ -133,10 +134,13 @@ namespace NetChan {
             Assert.IsTrue(elasped >= 40 && elasped < 100, "Elasped " + elasped);
         }
 
-        [Test]
+        [Test, Timeout(5000)]
         public void z_benchmark_send_and_recieve() {
-            const int runs = (int)2e5;
-            var start = Environment.TickCount;
+            const int runs = (int)2e6;
+            var startCpu = Process.GetCurrentProcess().TotalProcessorTime;
+            var sw = new Stopwatch();
+            sw.Start();
+
             var data = new QueuedChannel<int>(10);
             ThreadPool.QueueUserWorkItem(state => {
                 for (int i = 0; i < runs; i++) {
@@ -146,9 +150,13 @@ namespace NetChan {
             for (int i = 0; i < runs; i++) {
                 Assert.AreEqual(Maybe<int>.Some(i), data.Recv());
             }
-            var elasped = Environment.TickCount - start;
+
+            sw.Stop();
+            var elapsedCpu = Process.GetCurrentProcess().TotalProcessorTime - startCpu;
+            var elasped = sw.ElapsedMilliseconds;
             var opsms = (float)runs / (float)elasped;
             Console.WriteLine("took {0}ms, {1:N1}op/ns, {2:N0}op/sec", elasped, opsms / 1000f, opsms * 1000);
+            Console.WriteLine("CPU time {0}ms", elapsedCpu.TotalMilliseconds);
         }
     }
 }

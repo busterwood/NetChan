@@ -1,11 +1,12 @@
-﻿using System;
+﻿// Copyright the Netchan authors, see LICENSE.txt for permitted use
+using System;
 using System.Collections.Generic;
 using System.Text;
 
 namespace NetChan {
     /// <summary>Optional value (Option monad).  Like Nullable{T} but for classes as well</summary>
     /// <remarks>Includes a Reason why the value is missing</remarks>
-    public struct Maybe<T> {
+    public struct Maybe<T> : IEquatable<Maybe<T>> {
         public readonly T Value;
         public readonly bool IsSome;
         public readonly string Reason;
@@ -36,16 +37,22 @@ namespace NetChan {
             return new Maybe<T>(reason);
         }
 
+        public bool Equals(Maybe<T> other) {
+            if (IsNone) {
+                return other.IsNone;
+            }
+            return Value.Equals(other.Value);
+        }
+
         public override string ToString() {
             return IsNone ? "(none)" : Value.ToString();
         }
 
         public override bool Equals(object obj) {
-            if (obj == null || !(obj is Maybe<T>)) {
+            if (!(obj is Maybe<T>)) {
                 return false;
             }
-            var other = (Maybe<T>)obj;
-            return IsSome == other.IsSome && (IsNone || Value.Equals(other.Value));
+            return Equals((Maybe<T>)obj);
         }
 
         public override int GetHashCode() {

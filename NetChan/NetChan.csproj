@@ -36,6 +36,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Channel.cs" />
+    <Compile Include="CircularQueue.cs" />
     <Compile Include="ClosedChannelException.cs" />
     <Compile Include="IChannel.cs" />
     <Compile Include="IUntypedReceiver.cs" />

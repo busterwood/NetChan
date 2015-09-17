@@ -1,4 +1,5 @@
-﻿using System;
+﻿// Copyright the Netchan authors, see LICENSE.txt for permitted use
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -38,9 +39,7 @@ namespace NetChan {
                     return new Selected(i, waiters[i].Item);
                 }
                 Debug.Print("Thread {0}, {1} Recv: RecvSelect waiting index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
-                if (waiters[i].Event == null) {
-                    throw new InvalidOperationException("No wait handle");
-                }
+                Debug.Assert(waiters[i].Event != null); 
                 handles[handleCount] = waiters[i].Event;
                 handleIdx[handleCount] = i;
                 handleCount++;
