@@ -1,23 +1,20 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Runtime.Serialization;
+﻿// Copyright the Netchan authors, see LICENSE.txt for permitted use
 using System.Threading;
 
 namespace NetChan {
 ﻿
     internal class Waiter<T> : IWaiter {
         public Sync Sync;
-        private Maybe<T> item;
+        public Maybe<T> Item;
         public AutoResetEvent Event;
+        public Waiter<T> Next;  // next item in a linked list
 
         public Waiter(AutoResetEvent e) {
             Event = e;
         }
 
         public Waiter(T val, AutoResetEvent e) {
-            item = Maybe<T>.Some(val);
+            Item = Maybe<T>.Some(val);
             Event = e;
         }
 
@@ -29,30 +26,10 @@ namespace NetChan {
             Event.Set();
         }
 
-        public Maybe<T> Item {
-            get { return item; }
-        }
-
-        public bool SetItem(T v) {
-            // Sync will be set if this waiter is taking part in a Select
-            if (Sync != null) {
-                lock (Sync) {
-                    // Only set the value once, if another thread tries to call SetValue it will return FALSE
-                    if (Sync.Set) {
-                        return false;
-                    }
-                    Sync.Set = true;
-                    item = Maybe<T>.Some(v);
-                }
-                return true;
-            }
-            item = Maybe<T>.Some(v);
-            return true;
-        }
-
         public void Clear() {
             Sync = null;
-            item = Maybe<T>.None();
+            Item = Maybe<T>.None();
+            Next = null;
         }
 
         object IWaiter.Item {
@@ -63,20 +40,60 @@ namespace NetChan {
             get { return Event; }
         }
 
-
-        bool IWaiter.SetItem(object v) {
-            return SetItem((T)v);
-        }
+//        bool IWaiter.SetItem(object v) {
+//            return SetItem((T)v);
+//        }
 
     }
 
     public interface IWaiter {
         object Item { get; }
         AutoResetEvent Event { get; }
-        bool SetItem(object v);
+        //bool SetItem(object v);
     }
 
     public class Sync {
-        public bool Set;
+        public int Set;
+    }
+
+    class WaiterQ<T> {
+        internal Waiter<T> First;
+        private Waiter<T> last;
+
+        public bool Empty {
+            get { return First == null; }
+        }
+
+        public void Enqueue(Waiter<T> w) {
+            w.Next = null;
+            if (last == null) {
+                First = last = w;
+                return;
+            }
+            last.Next = w;
+            last = w;
+        }
+
+        public Waiter<T> Dequeue() {
+            for(;;) {
+                var w = First;
+                if (w == null) {
+                    return null;
+                }
+                if (w.Next == null) {
+                    First = last = null;
+                } else {
+                    First = w.Next;
+                    w.Next = null; // mark as removed
+                }
+                // if the waiter is part of a select and already signaled then ignore it
+                if (w.Sync != null) {
+                    if (Interlocked.CompareExchange(ref w.Sync.Set, 1, 0) != 0) {
+                        continue;
+                    }
+                }
+                return w;
+            }
+        } 
     }
 }

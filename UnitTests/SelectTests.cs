@@ -108,8 +108,9 @@ namespace NetChan {
         public void tryrecv_returns_if_the_other_channel_is_ready() {
             var ch1 = new Channel<int>();
             var ch2 = new QueuedChannel<bool>(1);
-            ThreadPool.QueueUserWorkItem(state => ch2.Send(true));
-            Thread.Sleep(1);
+            var sent = new AutoResetEvent(false);
+            ThreadPool.QueueUserWorkItem(state => { ch2.Send(true); sent.Set(); });
+            sent.WaitOne();
             var select = new Select(ch1, ch2);
             var got = select.TryRecv();
             Assert.AreEqual(1, got.Index, "index");
@@ -142,11 +143,14 @@ namespace NetChan {
             Assert.AreEqual(124, got.Value, "got.Value");
         }
 
-        [Test]
-        public void send_and_select_many_items() {
-            const int runs = (int)1e5;
-            var start = Environment.TickCount;
+        [Test, Timeout(3000)]
+        public void z_send_and_select_many_items_from_channel() {
+            const int runs = (int)3e5;
             var data = new Channel<int>();
+            var startCpu = Process.GetCurrentProcess().TotalProcessorTime;
+            var sw = new Stopwatch();
+            sw.Start();
+
             ThreadPool.QueueUserWorkItem(state => {
                 for (int i = 0; i < runs; i++) {
                     data.Send(i);
@@ -154,13 +158,45 @@ namespace NetChan {
             });
             var select = new Select(data);
             for (int i = 0; i < runs; i++) {
-                var got = select.Recv();
+                Selected got = select.Recv();
                 Assert.AreEqual(0, got.Index);
                 Assert.AreEqual(i, got.Value);
             }
-            var elasped = Environment.TickCount - start;
+
+            sw.Stop();
+            var elapsedCpu = Process.GetCurrentProcess().TotalProcessorTime - startCpu;
+            var elasped = sw.ElapsedMilliseconds;
             var opsms = (float)runs / (float)elasped;
-            Console.WriteLine("took {0}ms, {1:N1}op/ms, {2:N0}op/sec", elasped, opsms, opsms * 1000);
+            Console.WriteLine("took {0}ms, {1:N1}op/ns, {2:N0}op/sec", elasped, opsms / 1000f, opsms * 1000);
+            Console.WriteLine("CPU time {0}ms", elapsedCpu.TotalMilliseconds);
+        }
+
+        [Test, Timeout(3000)]
+        public void z_send_and_select_many_items_from_queued_channel() {
+            const int runs = (int)3e5;
+            var data = new QueuedChannel<int>(10);
+            var startCpu = Process.GetCurrentProcess().TotalProcessorTime;
+            var sw = new Stopwatch();
+            sw.Start();
+
+            ThreadPool.QueueUserWorkItem(state => {
+                for (int i = 0; i < runs; i++) {
+                    data.Send(i);
+                }
+            });
+            var select = new Select(data);
+            for (int i = 0; i < runs; i++) {
+                Selected got = select.Recv();
+                Assert.AreEqual(0, got.Index);
+                Assert.AreEqual(i, got.Value);
+            }
+
+            sw.Stop();
+            var elapsedCpu = Process.GetCurrentProcess().TotalProcessorTime - startCpu;
+            var elasped = sw.ElapsedMilliseconds;
+            var opsms = (float)runs / (float)elasped;
+            Console.WriteLine("took {0}ms, {1:N1}op/ns, {2:N0}op/sec", elasped, opsms / 1000f, opsms * 1000);
+            Console.WriteLine("CPU time {0}ms", elapsedCpu.TotalMilliseconds);
         }
 
         [Test]

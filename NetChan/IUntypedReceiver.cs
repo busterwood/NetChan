@@ -1,4 +1,5 @@
-﻿using System;
+﻿// Copyright the Netchan authors, see LICENSE.txt for permitted use
+using System;
 using System.Collections.Generic;
 using System.Text;
 
