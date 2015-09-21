@@ -78,14 +78,11 @@ namespace NetChan {
             private Stopwatch sw = new Stopwatch();
             public int N;
             private long totalTicks;
-            private long startMemory;
-            public long totalMemory;
             private CpuTime startCPU;
             public CpuTime totalCPU;
             
             public void Start() {
                 if (sw.IsRunning) return;
-                startMemory = GC.GetTotalMemory(true);
                 startCPU = NativeMethods.GetProcessTime();
                 sw.Start();
             }
@@ -94,7 +91,6 @@ namespace NetChan {
                 if (!sw.IsRunning) return;
                 sw.Stop();
                 totalCPU += NativeMethods.GetProcessTime() - startCPU;
-                totalMemory += GC.GetTotalMemory(true) - startMemory;
                 totalTicks += sw.ElapsedTicks;
             }
 
