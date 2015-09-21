@@ -100,6 +100,29 @@ namespace NetChan {
                 }
                 return w;
             }
-        } 
+        }
+
+        internal bool Remove(Waiter<T> rm) {
+            Waiter<T> prev = null;
+            var w = First;
+            while (w != null) {
+                if (w == rm) {
+                    if (prev != null) {
+                        prev.Next = w.Next;
+                    }
+                    if (w == First) {
+                        First = w.Next;
+                    }
+                    if (w == last) {
+                        last = prev;
+                    }
+                    w.Next = null;
+                    return true;
+                }
+                prev = w;
+                w = w.Next; 
+            }
+            return false;
+        }
     }
 }

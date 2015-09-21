@@ -19,5 +19,7 @@ namespace NetChan {
 
         /// <summary>Releases the waiter after use</summary>
         void ReleaseWaiter(IWaiter w);
+
+        void RemoveReceiver(IWaiter waiter);
     }
 }

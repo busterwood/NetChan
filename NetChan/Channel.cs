@@ -256,6 +256,12 @@ namespace NetChan {
             }
         }
 
+        void IUntypedReceiver.RemoveReceiver(IWaiter w) {
+            var r = (Waiter<T>)w;
+            lock (sync) {
+                receivers.Remove(r);
+            }
+        }
         void IUntypedReceiver.ReleaseWaiter(IWaiter h) {
             WaiterPool<T>.Put((Waiter<T>)h);
         }

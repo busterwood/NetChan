@@ -57,8 +57,17 @@ namespace NetChan {
             int sig = handleIdx[signalled];
             var maybe = waiters[sig].Item;
             Debug.Print("Thread {0}, {1} Recv, sync Set, idx {2}, value {3}", Thread.CurrentThread.ManagedThreadId, GetType(), sig, maybe);
-            // only release the signalled Channel,the others will be releases as the Channel is read
-            this[sig].ReleaseWaiter(waiters[sig]);
+
+            // release waiters otherwise slow channels will build up
+            foreach (int i in readOrder) {
+                if (waiters[i] == null) {
+                    continue;
+                }
+                if (i != sig) {
+                    this[i].RemoveReceiver(waiters[i]);
+                }
+                this[i].ReleaseWaiter(waiters[i]);
+            }
             return new Selected(sig, maybe);
         }
 
