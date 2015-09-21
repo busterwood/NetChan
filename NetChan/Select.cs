@@ -39,8 +39,9 @@ namespace NetChan {
                     }
                     waiters[i] = chans[i].GetWaiter(sync);
                     if (chans[i].RecvSelect(waiters[i])) {
-                        Debug.Print("Thread {0}, {1} Recv: RecvSelect returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), waiters[i].Item, i);
-                        return new Selected(i, waiters[i].Item);
+                        var v1 = waiters[i].Item;
+                        Debug.Print("Thread {0}, {1} Recv: RecvSelect returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), v1, i);
+                        return new Selected(i, v1);
                     }
                     Debug.Print("Thread {0}, {1} Recv: RecvSelect waiting index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
                     handleCount++;

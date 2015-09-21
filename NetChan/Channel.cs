@@ -157,7 +157,7 @@ namespace NetChan {
                 Waiter<T> s = senders.Dequeue();
                 if (s != null) {
                     items.Enqueue(s.Item.Value);
-                    Debug.Print("Thread {0}, {1} BlockingRecv, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
+                    Debug.Print("Thread {0}, {1} MoveSendQToItemQ, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
                     s.Wakeup();
                 }
             }
