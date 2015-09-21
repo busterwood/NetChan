@@ -49,10 +49,7 @@ namespace NetChan {
         }
 
         public override bool Equals(object obj) {
-            if (!(obj is Maybe<T>)) {
-                return false;
-            }
-            return Equals((Maybe<T>)obj);
+            return obj is Maybe<T> && Equals((Maybe<T>)obj);
         }
 
         public override int GetHashCode() {

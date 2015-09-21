@@ -25,7 +25,7 @@ namespace NetChan {
 
         [Test]
         public void recv_blocks_until_send() {
-            var ch = new Channel<bool>();
+            var ch = new Channel<bool>(0);
             var start = Environment.TickCount;
             ThreadPool.QueueUserWorkItem(state => { Thread.Sleep(123); ch.Send(true); });
             ch.Recv();
@@ -41,7 +41,7 @@ namespace NetChan {
 
         [Test, Timeout(100)]
         public void recv_get_value_sent_by_thread_pool_thread() {
-            var ch = new Channel<int>();
+            var ch = new Channel<int>(0);
             ThreadPool.QueueUserWorkItem(state => ch.Send(123));
             Assert.AreEqual(Maybe<int>.Some(123), ch.Recv());
         }
@@ -150,27 +150,21 @@ namespace NetChan {
 
         [Test, Timeout(5000)]
         public void z_benchmark_send_and_recieve() {
-            const int runs = (int)5e5;
-            var startCpu = Process.GetCurrentProcess().TotalProcessorTime;
-            var sw = new Stopwatch();
-            sw.Start();
-
-            var data = new Channel<int>();
-            ThreadPool.QueueUserWorkItem(state => {
+            Benchmark.Go("unbuffered", (int runs) => {
+                var data = new Channel<int>();
+                new Thread(() => {
+                    for (int i = 0; i < runs; i++) {
+                        data.Send(i);
+                    }
+                }).Start();
                 for (int i = 0; i < runs; i++) {
-                    data.Send(i);
+                    var got = data.Recv();
+                    if (got.IsNone || got.Value != i) {
+                        Assert.AreEqual(Maybe<int>.Some(i), data.Recv());
+                    }
                 }
             });
-            for (int i = 0; i < runs; i++) {
-                Assert.AreEqual(Maybe<int>.Some(i), data.Recv());
-            }
-
-            sw.Stop();
-            var elapsedCpu = Process.GetCurrentProcess().TotalProcessorTime - startCpu;
-            var elasped = sw.ElapsedMilliseconds;
-            var opsms = (float)runs / (float)elasped;
-            Console.WriteLine("took {0}ms, {1:N1}op/ms, {2:N0}op/sec", elasped, opsms, opsms * 1000);
-            Console.WriteLine("CPU time {0}ms", elapsedCpu.TotalMilliseconds);
         }
+
     }
 }

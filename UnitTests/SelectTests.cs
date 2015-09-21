@@ -87,7 +87,7 @@ namespace NetChan {
         [Test]
         public void tryrecv_returns_minus_one_if_no_channels_are_ready() {
             var ch1 = new Channel<int>();
-            var ch2 = new QueuedChannel<bool>(1);
+            var ch2 = new Channel<bool>(1);
             var select = new Select(ch1, ch2);
             var got = select.TryRecv();
             Assert.AreEqual(-1, got.Index, "index");
@@ -96,7 +96,7 @@ namespace NetChan {
         [Test]
         public void tryrecv_returns_if_one_channel_is_ready() {
             var ch1 = new Channel<int>();
-            var ch2 = new QueuedChannel<bool>(1);
+            var ch2 = new Channel<bool>(1);
             ThreadPool.QueueUserWorkItem(state => ch1.Send(123));
             Thread.Sleep(1);
             var select = new Select(ch1, ch2);
@@ -107,7 +107,7 @@ namespace NetChan {
         [Test]
         public void tryrecv_returns_if_the_other_channel_is_ready() {
             var ch1 = new Channel<int>();
-            var ch2 = new QueuedChannel<bool>(1);
+            var ch2 = new Channel<bool>(1);
             var sent = new AutoResetEvent(false);
             ThreadPool.QueueUserWorkItem(state => { ch2.Send(true); sent.Set(); });
             sent.WaitOne();
@@ -118,8 +118,8 @@ namespace NetChan {
 
         [Test]
         public void can_read_after_select_on_queued_Channels() {
-            var ch1 = new QueuedChannel<int>(1);
-            var ch2 = new QueuedChannel<bool>(1);
+            var ch1 = new Channel<int>(1);
+            var ch2 = new Channel<bool>(1);
             ThreadPool.QueueUserWorkItem(state => {
                 ch1.Send(123);
                 ch2.Send(true);
@@ -144,64 +144,74 @@ namespace NetChan {
         }
 
         [Test, Timeout(3000)]
-        public void z_send_and_select_many_items_from_channel() {
-            const int runs = (int)3e5;
-            var data = new Channel<int>();
-            var startCpu = Process.GetCurrentProcess().TotalProcessorTime;
-            var sw = new Stopwatch();
-            sw.Start();
-
-            ThreadPool.QueueUserWorkItem(state => {
+        public void z0_send_and_select_many_items_from_channel() {
+            Benchmark.Go("unbuffered select", (int runs) => {
+                var data = new Channel<int>();
+                new Thread(() => {
+                    for (int i = 0; i < runs; i++) {
+                        data.Send(i);
+                    }
+                }).Start();
+                var select = new Select(data);
                 for (int i = 0; i < runs; i++) {
-                    data.Send(i);
+                    Selected got = select.Recv();
+                    if (got.Index != 0) {
+                        Assert.AreEqual(0, got.Index);
+                    }
+                    if (!(got.Value is int) || ((int)got.Value != i)) {
+                        Assert.AreEqual(i, got.Value);
+                    }
                 }
             });
-            var select = new Select(data);
-            for (int i = 0; i < runs; i++) {
-                Selected got = select.Recv();
-                Assert.AreEqual(0, got.Index);
-                Assert.AreEqual(i, got.Value);
-            }
-
-            sw.Stop();
-            var elapsedCpu = Process.GetCurrentProcess().TotalProcessorTime - startCpu;
-            var elasped = sw.ElapsedMilliseconds;
-            var opsms = (float)runs / (float)elasped;
-            Console.WriteLine("took {0}ms, {1:N1}op/ns, {2:N0}op/sec", elasped, opsms / 1000f, opsms * 1000);
-            Console.WriteLine("CPU time {0}ms", elapsedCpu.TotalMilliseconds);
         }
 
         [Test, Timeout(3000)]
-        public void z_send_and_select_many_items_from_queued_channel() {
-            const int runs = (int)3e5;
-            var data = new QueuedChannel<int>(10);
-            var startCpu = Process.GetCurrentProcess().TotalProcessorTime;
-            var sw = new Stopwatch();
-            sw.Start();
-
-            ThreadPool.QueueUserWorkItem(state => {
+        public void z1_send_and_select_many_items_from_queued_channel() {
+            Benchmark.Go("select on buffer of 1", (int runs) => {
+                var data = new Channel<int>(10);
+                new Thread(() => {
+                    for (int i = 0; i < runs; i++) {
+                        data.Send(i);
+                    }
+                }).Start();
+                var select = new Select(data);
                 for (int i = 0; i < runs; i++) {
-                    data.Send(i);
+                    Selected got = select.Recv();
+                    if (got.Index != 0) {
+                        Assert.AreEqual(0, got.Index);
+                    }
+                    if (!(got.Value is int) || ((int)got.Value != i)) {
+                        Assert.AreEqual(i, got.Value);
+                    }
                 }
             });
-            var select = new Select(data);
-            for (int i = 0; i < runs; i++) {
-                Selected got = select.Recv();
-                Assert.AreEqual(0, got.Index);
-                Assert.AreEqual(i, got.Value);
-            }
+        }
 
-            sw.Stop();
-            var elapsedCpu = Process.GetCurrentProcess().TotalProcessorTime - startCpu;
-            var elasped = sw.ElapsedMilliseconds;
-            var opsms = (float)runs / (float)elasped;
-            Console.WriteLine("took {0}ms, {1:N1}op/ns, {2:N0}op/sec", elasped, opsms / 1000f, opsms * 1000);
-            Console.WriteLine("CPU time {0}ms", elapsedCpu.TotalMilliseconds);
+        [Test, Timeout(3000)]
+        public void z10_send_and_select_many_items_from_queued_channel() {
+            Benchmark.Go("select on buffer of 10", (int runs) => {
+                var data = new Channel<int>(10);
+                new Thread(() => {
+                    for (int i = 0; i < runs; i++) {
+                        data.Send(i);
+                    }
+                }).Start();
+                var select = new Select(data);
+                for (int i = 0; i < runs; i++) {
+                    Selected got = select.Recv();
+                    if (got.Index != 0) {
+                        Assert.AreEqual(0, got.Index);
+                    }
+                    if (!(got.Value is int) || ((int)got.Value != i)) {
+                        Assert.AreEqual(i, got.Value);
+                    }
+                }
+            });
         }
 
         [Test]
         public void select_on_closed_channel_does_not_block_and_returns_no_value() {
-            var ch1 = new QueuedChannel<int>(1);
+            var ch1 = new Channel<int>(1);
             ch1.Close();
             var select = new Select(ch1);
             var got = select.Recv();
@@ -212,7 +222,7 @@ namespace NetChan {
         [Test]
         public void select_on_one_null_channel() {
             var ch1 = new Channel<int>();
-            var ch2 = new QueuedChannel<bool>(2);
+            var ch2 = new Channel<bool>(2);
             ch2.Send(true);
             var select = new Select(ch1, ch2);
             select[0] = null;
