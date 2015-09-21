@@ -7,7 +7,7 @@ using System.Threading;
 namespace NetChan {
     public static class Time {
 
-        public static IChannel<DateTime> After(TimeSpan after) {
+        public static Channel<DateTime> After(TimeSpan after) {
             var ch = new Channel<DateTime>(1);
             var t = new Timer(state => { ch.TrySend(DateTime.Now); ch.Close(); });
             t.Change(after, TimeSpan.FromMilliseconds(-1));

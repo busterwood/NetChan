@@ -37,7 +37,6 @@
   <ItemGroup>
     <Compile Include="CircularQueue.cs" />
     <Compile Include="ClosedChannelException.cs" />
-    <Compile Include="IChannel.cs" />
     <Compile Include="IUntypedReceiver.cs" />
     <Compile Include="Maybe.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

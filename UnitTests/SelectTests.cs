@@ -138,6 +138,7 @@ namespace NetChan {
                 Assert.AreEqual(true, got.Value, "got.Value");
                 Assert.AreEqual(Maybe<int>.Some(123), ch1.Recv());
             }
+            select[1] = null;
             got = select.Recv();
             Assert.AreEqual(0, got.Index, "got.Index, value =" + got.Value);
             Assert.AreEqual(124, got.Value, "got.Value");
