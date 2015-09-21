@@ -59,7 +59,7 @@ namespace NetChan {
             Debug.Print("Thread {0}, {1} Recv, sync Set, idx {2}, value {3}", Thread.CurrentThread.ManagedThreadId, GetType(), sig, maybe);
 
             // release waiters otherwise slow channels will build up
-            foreach (int i in readOrder) {
+            for (int i = 0; i < waiters.Length; i++) {
                 if (waiters[i] == null) {
                     continue;
                 }
@@ -79,12 +79,12 @@ namespace NetChan {
             try {
                 foreach (int i in readOrder) {
                     if (this[i] == null) {
-                        Debug.Print("Thread {0}, {1} Recv: channel is null, index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
+                        Debug.Print("Thread {0}, {1} TryRecv: channel is null, index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
                         continue;
                     }
                     waiters[i] = this[i].GetWaiter(null);
                     if (this[i].TryRecvSelect(waiters[i])) {
-                        Debug.Print("Thread {0}, {1} Recv: RecvSelect returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), waiters[i].Item, i);
+                        Debug.Print("Thread {0}, {1} TryRecv: TryRecvSelect returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), waiters[i].Item, i);
                         return new Selected(i, waiters[i].Item);
                     }
                 }
