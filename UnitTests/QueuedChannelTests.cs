@@ -71,7 +71,7 @@ namespace NetChan {
         public void tryrecv_does_not_block_on_a_closed_Channel() {
             var ch = new Channel<int>(1);
             ch.Close();
-            Assert.AreEqual(Maybe<int>.None("closed"), ch.TryRecv());
+            Assert.AreEqual(Maybe<int>.None(), ch.TryRecv());
         }
 
 
@@ -80,7 +80,7 @@ namespace NetChan {
             var ch = new Channel<int>(1);
             ThreadPool.QueueUserWorkItem(state => { ch.Send(123); ch.Close(); });
             Assert.AreEqual(Maybe<int>.Some(123), ch.Recv());
-            Assert.AreEqual(Maybe<int>.None("closed"), ch.TryRecv());
+            Assert.AreEqual(Maybe<int>.None(), ch.TryRecv());
         }
 
         [Test]

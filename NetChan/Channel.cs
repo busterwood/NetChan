@@ -9,13 +9,13 @@ namespace NetChan {
 ﻿
     public class Channel<T> : IUntypedReceiver, IEnumerable<T> {
         private readonly object sync = new object();
-        private readonly WaiterQ<T> recq = new WaiterQ<T>();
-        private readonly WaiterQ<T> sendq = new WaiterQ<T>();
-        private readonly CircularQueue<T> itemq;
+        private readonly WaiterQ<T> receivers = new WaiterQ<T>();
+        private readonly WaiterQ<T> senders = new WaiterQ<T>();
+        private readonly CircularQueue<T> items;
         private bool closed;
 
         public int Capacity {
-            get { return itemq.Capacity; }
+            get { return items.Capacity; }
         }
 
         /// <summary>
@@ -31,7 +31,7 @@ namespace NetChan {
             if (capacity < 0) {
                 throw new ArgumentOutOfRangeException("capacity", capacity, "must be zero or more");
             }
-            itemq = new CircularQueue<T>(capacity);
+            items = new CircularQueue<T>(capacity);
         }
 
         /// <summary>
@@ -45,12 +45,12 @@ namespace NetChan {
                     return;
                 }
                 closed = true;
-                if (sendq.Empty && itemq.Empty && !recq.Empty) {
+                if (senders.Empty && items.Empty && !receivers.Empty) {
                     // wait up the waiting recievers
                     int count = 0;
-                    for (var r = recq.First; r != null; r = r.Next) {
+                    for (var r = receivers.First; r != null; r = r.Next) {
                         if (r.Sync != null) {
-                            Interlocked.Exchange(ref r.Sync.Set, 1);
+                            r.Sync.TrySet();
                         }
                         r.Wakeup();
                         count++;
@@ -68,8 +68,8 @@ namespace NetChan {
                 if (closed) {
                     throw new ClosedChannelException("You cannot send on a closed Channel");
                 }
-                if (itemq.Empty) {
-                    Waiter<T> wr = recq.Dequeue();
+                if (items.Empty) {
+                    Waiter<T> wr = receivers.Dequeue();
                     if (wr != null) {
                         wr.Item = Maybe<T>.Some(v);
                         Debug.Print("Thread {0}, {1} Send({2}), SetItem suceeded", Thread.CurrentThread.ManagedThreadId, GetType(), wr.Item);
@@ -77,14 +77,14 @@ namespace NetChan {
                         return;
                     }
                 }
-                if (!itemq.Full) {
+                if (!items.Full) {
                     Debug.Print("Thread {0}, {1} Send({2}), spare capacity, adding to itemq", Thread.CurrentThread.ManagedThreadId, GetType(), v);
-                    itemq.Enqueue(v);
+                    items.Enqueue(v);
                     return;
                 }
                 // at capacity, queue our waiter until some capacity is freed up by a recv
                 s = WaiterPool<T>.Get(v);
-                sendq.Enqueue(s);
+                senders.Enqueue(s);
             }
             // wait for the reciever to wake us up
             Debug.Print("Thread {0}, {1} Send({2}), waiting ", Thread.CurrentThread.ManagedThreadId, GetType(), v);
@@ -95,14 +95,14 @@ namespace NetChan {
 
         public bool TrySend(T v) {
             lock (sync) {
-                if (closed || itemq == null || itemq.Full) {
+                if (closed || items == null || items.Full) {
                     return false;
                 }
-                itemq.Enqueue(v);
+                items.Enqueue(v);
                 //see if there is a waiting reciever 
-                Waiter<T> r = recq.Dequeue();
+                Waiter<T> r = receivers.Dequeue();
                 if (r != null) {
-                    r.Item = Maybe<T>.Some(itemq.Dequeue());
+                    r.Item = Maybe<T>.Some(items.Dequeue());
                     r.Wakeup();
                 }
             }
@@ -114,64 +114,66 @@ namespace NetChan {
         public Maybe<T> Recv() {
             Waiter<T> r;
             lock (sync) {
-                if (!itemq.Empty) {
-                    var value = itemq.Dequeue();
+                if (!items.Empty) {
+                    var value = items.Dequeue();
                     Debug.Print("Thread {0}, {1} Recv, removed item from itemq", Thread.CurrentThread.ManagedThreadId, GetType());
                     MoveSendQToItemQ();
                     return Maybe<T>.Some(value);
                 }
-                if (!sendq.Empty) {
-                    Waiter<T> s = sendq.Dequeue();
+                if (!senders.Empty) {
+                    Waiter<T> s = senders.Dequeue();
                     if (s != null) {
                         Debug.Print("Thread {0}, {1} Recv, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
-                        var t1 = s.Item;
+                        var mv = s.Item;
                         s.Wakeup();
-                        return t1;
+                        return mv;
                     }
                 }
                 if (closed) {
                     Debug.Print("Thread {0}, {1} Recv, Channel is closed", Thread.CurrentThread.ManagedThreadId, GetType());
-                    return Maybe<T>.None("closed");
+                    return Maybe<T>.None();
                 }
                 r = WaiterPool<T>.Get();
-                recq.Enqueue(r);
+                receivers.Enqueue(r);
             }
             // wait for a sender to signal it has sent
             Debug.Print("Thread {0}, {1} Recv, waiting", Thread.CurrentThread.ManagedThreadId, GetType());
             r.WaitOne();
             Debug.Print("Thread {0}, {1} Recv, woke up", Thread.CurrentThread.ManagedThreadId, GetType());
-            var t = r.Item;
+            var v = r.Item;
             WaiterPool<T>.Put(r);
-            return t;
+            return v;
         }
 
         private void MoveSendQToItemQ() {
-            if (!sendq.Empty) {
-                Waiter<T> s = sendq.Dequeue();
-                itemq.Enqueue(s.Item.Value);
-                Debug.Print("Thread {0}, {1} BlockingRecv, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
-                s.Wakeup();
+            if (!senders.Empty) {
+                Waiter<T> s = senders.Dequeue();
+                if (s != null) {
+                    items.Enqueue(s.Item.Value);
+                    Debug.Print("Thread {0}, {1} BlockingRecv, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
+                    s.Wakeup();
+                }
             }
         }
 
         /// <remarks>returns <see cref="Maybe{T}.None()"/> if would have to block or if the channel is closed</remarks>
         public Maybe<T> TryRecv() {
             lock (sync) {
-                if (!itemq.Empty) {
-                    var value = itemq.Dequeue();
+                if (!items.Empty) {
+                    var v = items.Dequeue();
                     MoveSendQToItemQ();
-                    return Maybe<T>.Some(value);
+                    return Maybe<T>.Some(v);
                 }
-                if (!sendq.Empty) {
-                    Waiter<T> s = sendq.Dequeue();
+                if (!senders.Empty) {
+                    Waiter<T> s = senders.Dequeue();
                     if (s != null) {
                         Debug.Print("Thread {0}, {1} Recv, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
-                        var t1 = s.Item;
+                        var mv = s.Item;
                         s.Wakeup();
-                        return t1;
+                        return mv;
                     }
                 }
-                return Maybe<T>.None(closed ? "closed" : "queue is empty");
+                return Maybe<T>.None();
             }
         }
 
@@ -207,14 +209,14 @@ namespace NetChan {
         bool IUntypedReceiver.RecvSelect(IWaiter w) {
             var r = (Waiter<T>)w;
             lock (sync) {
-                if (!itemq.Empty && r.Sync.TrySet()) {
-                    r.Item = Maybe<T>.Some(itemq.Dequeue());
+                if (!items.Empty && r.Sync.TrySet()) {
+                    r.Item = Maybe<T>.Some(items.Dequeue());
                     Debug.Print("Thread {0}, {1} RecvSelect, removed {2} from itemq", Thread.CurrentThread.ManagedThreadId, GetType(), r.Item);
                     MoveSendQToItemQ();
                     return true;                
                 }
-                if (!sendq.Empty) {
-                    Waiter<T> s = sendq.Dequeue();
+                if (!senders.Empty) {
+                    Waiter<T> s = senders.Dequeue();
                     if (s != null) {
                         Debug.Print("Thread {0}, {1} RecvSelect, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
                         r.Item = s.Item;
@@ -225,7 +227,7 @@ namespace NetChan {
                 if (closed) {
                     return true;
                 }
-                recq.Enqueue(r);
+                receivers.Enqueue(r);
             }
             return false;
         }
@@ -234,14 +236,14 @@ namespace NetChan {
         bool IUntypedReceiver.TryRecvSelect(IWaiter w) {
             var r = (Waiter<T>)w;
             lock (sync) {
-                if (!itemq.Empty) {
-                    r.Item = Maybe<T>.Some(itemq.Dequeue());
+                if (!items.Empty) {
+                    r.Item = Maybe<T>.Some(items.Dequeue());
                     Debug.Print("Thread {0}, {1} TryRecvSelect, removed {2} from itemq", Thread.CurrentThread.ManagedThreadId, GetType(), r.Item);
                     MoveSendQToItemQ();
                     return true;                    
                 }
-                if (!sendq.Empty) {
-                    Waiter<T> s = sendq.Dequeue();
+                if (!senders.Empty) {
+                    Waiter<T> s = senders.Dequeue();
                     if (s != null) {
                         Debug.Print("Thread {0}, {1} RecvSelect, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
                         r.Item = s.Item;
