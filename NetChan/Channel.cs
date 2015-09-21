@@ -21,7 +21,7 @@ namespace NetChan {
         /// <summary>
         /// Create an unbuffered channel for communicating between threads, with CSP-like semantics
         /// </summary>
-        public Channel() {
+        public Channel() : this(0) {
         }
 
         /// <summary>
@@ -45,7 +45,7 @@ namespace NetChan {
                     return;
                 }
                 closed = true;
-                if (sendq.Empty && (itemq == null || itemq.Empty) && !recq.Empty) {
+                if (sendq.Empty && itemq.Empty && !recq.Empty) {
                     // wait up the waiting recievers
                     int count = 0;
                     for (var r = recq.First; r != null; r = r.Next) {
@@ -68,7 +68,7 @@ namespace NetChan {
                 if (closed) {
                     throw new ClosedChannelException("You cannot send on a closed Channel");
                 }
-                if (itemq == null || itemq.Empty) {
+                if (itemq.Empty) {
                     Waiter<T> wr = recq.Dequeue();
                     if (wr != null) {
                         wr.Item = Maybe<T>.Some(v);
@@ -77,7 +77,7 @@ namespace NetChan {
                         return;
                     }
                 }
-                if (itemq != null && !itemq.Full) {
+                if (!itemq.Full) {
                     Debug.Print("Thread {0}, {1} Send({2}), spare capacity, adding to itemq", Thread.CurrentThread.ManagedThreadId, GetType(), v);
                     itemq.Enqueue(v);
                     return;
@@ -114,7 +114,7 @@ namespace NetChan {
         public Maybe<T> Recv() {
             Waiter<T> r;
             lock (sync) {
-                if (itemq != null && !itemq.Empty) {
+                if (!itemq.Empty) {
                     var value = itemq.Dequeue();
                     Debug.Print("Thread {0}, {1} Recv, removed item from itemq", Thread.CurrentThread.ManagedThreadId, GetType());
                     MoveSendQToItemQ();
@@ -157,7 +157,7 @@ namespace NetChan {
         /// <remarks>returns <see cref="Maybe{T}.None()"/> if would have to block or if the channel is closed</remarks>
         public Maybe<T> TryRecv() {
             lock (sync) {
-                if (itemq != null && !itemq.Empty) {
+                if (!itemq.Empty) {
                     var value = itemq.Dequeue();
                     MoveSendQToItemQ();
                     return Maybe<T>.Some(value);
@@ -176,7 +176,7 @@ namespace NetChan {
         }
 
         public IEnumerator<T> GetEnumerator() {
-            for (; ; ) {
+            for (;;) {
                 var maybe = Recv();
                 if (maybe.IsNone) {
                     yield break; // Channel has been closed
@@ -207,7 +207,7 @@ namespace NetChan {
         bool IUntypedReceiver.RecvSelect(IWaiter w) {
             var r = (Waiter<T>)w;
             lock (sync) {
-                if (itemq != null && !itemq.Empty && r.Sync.TrySet()) {
+                if (!itemq.Empty && r.Sync.TrySet()) {
                     r.Item = Maybe<T>.Some(itemq.Dequeue());
                     Debug.Print("Thread {0}, {1} RecvSelect, removed {2} from itemq", Thread.CurrentThread.ManagedThreadId, GetType(), r.Item);
                     MoveSendQToItemQ();
@@ -234,7 +234,7 @@ namespace NetChan {
         bool IUntypedReceiver.TryRecvSelect(IWaiter w) {
             var r = (Waiter<T>)w;
             lock (sync) {
-                if (itemq != null && !itemq.Empty) {
+                if (!itemq.Empty) {
                     r.Item = Maybe<T>.Some(itemq.Dequeue());
                     Debug.Print("Thread {0}, {1} TryRecvSelect, removed {2} from itemq", Thread.CurrentThread.ManagedThreadId, GetType(), r.Item);
                     MoveSendQToItemQ();

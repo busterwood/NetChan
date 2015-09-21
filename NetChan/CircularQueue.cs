@@ -23,7 +23,7 @@ namespace NetChan {
         }
 
         public bool Full {
-            get { return tail == head-1 || (head==0 && tail==arr.Length-1); }
+            get { return tail == head - 1 || (head == 0 && tail == arr.Length - 1); }
         }
 
         public int Capacity {
@@ -38,18 +38,12 @@ namespace NetChan {
 
         public void Enqueue(T item) {
             Debug.Assert(!Full);
-//            if (Full) {
-//                throw new InvalidOperationException("Queue is full");
-//            }
             arr[tail] = item;
             tail = (tail + 1) % arr.Length;
         }
 
         public T Dequeue() {
             Debug.Assert(!Empty);
-            //            if (Empty) {
-//                throw new InvalidOperationException("Queue is empty");
-//            }
             T removed = arr[head];
             arr[head] = default(T);
             head = (head + 1) % arr.Length;
@@ -58,9 +52,6 @@ namespace NetChan {
 
         public T Peek() {
             Debug.Assert(!Empty);
-//            if (Empty) {
-//                throw new InvalidOperationException("Queue is empty");
-//            }
             return arr[head];
         }
 
@@ -73,7 +64,6 @@ namespace NetChan {
         IEnumerator IEnumerable.GetEnumerator() {
             return GetEnumerator();
         }
-
     } 
 
 }

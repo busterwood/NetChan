@@ -75,7 +75,6 @@ namespace NetChan {
         }
 
         internal class B {
-         
             private Stopwatch sw = new Stopwatch();
             public int N;
             private long totalTicks;
@@ -131,18 +130,18 @@ namespace NetChan {
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool GetProcessTimes(IntPtr hProcess, out FILETIME creation, out FILETIME exit, out FILETIME kernel, out FILETIME user);
 
-        public static TimeSpan AsTimeSpan(this FILETIME fileTime) {
-            //NB! uint conversion must be done on both fields before ulong conversion
-            ulong hFT2 = unchecked((((ulong)(uint)fileTime.dwHighDateTime) << 32) | (uint)fileTime.dwLowDateTime);
-            return TimeSpan.FromTicks((long)hFT2);
-        }
-
         public static CpuTime GetProcessTime() {
             FILETIME creation, exit, kernel, user;
             if (!GetProcessTimes(Process.GetCurrentProcess().Handle, out creation, out exit, out kernel, out user)) {
                 throw new Win32Exception();
             }
             return new CpuTime(kernel.AsTimeSpan(), user.AsTimeSpan());
+        }
+
+        private static TimeSpan AsTimeSpan(this FILETIME fileTime) {
+            //NB! uint conversion must be done on both fields before ulong conversion
+            ulong hFT2 = unchecked((((ulong)(uint)fileTime.dwHighDateTime) << 32) | (uint)fileTime.dwLowDateTime);
+            return TimeSpan.FromTicks((long)hFT2);
         }
     }
 
