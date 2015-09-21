@@ -6,10 +6,10 @@ using System.Threading;
 namespace NetChan {
 ﻿
     internal class Waiter<T> : IWaiter {
-        public Sync Sync;
-        public Maybe<T> Item;
-        public IntPtr Event;
-        public Waiter<T> Next;  // next item in a linked list
+        public Sync Sync;       // used by Select.Recv to ensure only one channel is read
+        public Maybe<T> Item;   // the value that has been read (or the value being sent)
+        public IntPtr Event;    // autoreset event handle, 20% faster than using the .NET wrapper
+        public Waiter<T> Next;  // next item in a linked list (queue)
 
         public Waiter() {
             Event = NativeMethods.CreateEvent(IntPtr.Zero, false, false, IntPtr.Zero);
