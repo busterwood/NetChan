@@ -95,18 +95,25 @@ namespace NetChan {
 
         public bool TrySend(T v) {
             lock (sync) {
-                if (closed || items == null || items.Full) {
+                if (closed) {
                     return false;
                 }
-                items.Enqueue(v);
-                //see if there is a waiting reciever 
-                Waiter<T> r = receivers.Dequeue();
-                if (r != null) {
-                    r.Item = Maybe<T>.Some(items.Dequeue());
-                    r.Wakeup();
+                if (items.Empty) {
+                    Waiter<T> wr = receivers.Dequeue();
+                    if (wr != null) {
+                        wr.Item = Maybe<T>.Some(v);
+                        Debug.Print("Thread {0}, {1} TrySend({2}), waking up reveiver", Thread.CurrentThread.ManagedThreadId, GetType(), wr.Item);
+                        wr.Wakeup();
+                        return true;
+                    }
+                }
+                if (!items.Full) {
+                    Debug.Print("Thread {0}, {1} TrySend({2}), add item to queue", Thread.CurrentThread.ManagedThreadId, GetType(), v);
+                    items.Enqueue(v);
+                    return true;
                 }
             }
-            return true;
+            return false;
         }
 
         /// <summary>Returns an item, blocking if not ready</summary>
@@ -167,7 +174,7 @@ namespace NetChan {
                 if (!senders.Empty) {
                     Waiter<T> s = senders.Dequeue();
                     if (s != null) {
-                        Debug.Print("Thread {0}, {1} Recv, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
+                        Debug.Print("Thread {0}, {1} Recv, waking sender, item {2}", Thread.CurrentThread.ManagedThreadId, GetType(), s.Item);
                         var mv = s.Item;
                         s.Wakeup();
                         return mv;
