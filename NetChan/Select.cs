@@ -2,6 +2,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Threading;
 
@@ -50,7 +51,7 @@ namespace NetChan {
                     throw new InvalidOperationException("All channels are null, select will block forever");
                 }
                 // collect the handles into an array we can pass to WaitAny
-                var handles = new WaitHandle[handleCount];
+                var handles = new IntPtr[handleCount];
                 var handleIdx = new int[handleCount];
                 handleCount = 0;
                 for (int i = 0; i < waiters.Length; i++) {
@@ -62,7 +63,10 @@ namespace NetChan {
                     handleCount++;
                 }
                 Debug.Print("Thread {0}, {1} Recv, there are {2} wait handles", Thread.CurrentThread.ManagedThreadId, GetType(), handles.Length);
-                int signalled = WaitHandle.WaitAny(handles);
+                int signalled = NativeMethods.WaitForMultipleObjects(handleCount, handles, false, -1);
+                if (signalled == -1) {
+                    throw new Win32Exception();
+                }
                 Debug.Print("Thread {0}, {1} Recv, woke up after WaitAny", Thread.CurrentThread.ManagedThreadId, GetType());
                 int sig = handleIdx[signalled];
                 object val = waiters[sig].Item;

@@ -1,4 +1,6 @@
 ﻿// Copyright the Netchan authors, see LICENSE.txt for permitted use
+using System;
+using System.ComponentModel;
 using System.Threading;
 
 namespace NetChan {
@@ -6,24 +8,33 @@ namespace NetChan {
     internal class Waiter<T> : IWaiter {
         public Sync Sync;
         public Maybe<T> Item;
-        public AutoResetEvent Event;
+        public IntPtr Event;
         public Waiter<T> Next;  // next item in a linked list
 
-        public Waiter(AutoResetEvent e) {
-            Event = e;
+        public Waiter() {
+            Event = NativeMethods.CreateEvent(IntPtr.Zero, false, false, IntPtr.Zero);
+            if (Event == IntPtr.Zero) {
+                throw new Win32Exception();
+            }
         }
 
-        public Waiter(T val, AutoResetEvent e) {
-            Item = Maybe<T>.Some(val);
-            Event = e;
+        ~Waiter() {
+            var e = Event;
+            if (e != IntPtr.Zero) {
+                NativeMethods.CloseHandle(e);
+            }
         }
 
         public void WaitOne() {
-            Event.WaitOne();
+            if (NativeMethods.WaitForSingleObject(Event, -1) == -1) {
+                throw new Win32Exception();
+            }
         }
 
         public void Wakeup() {
-            Event.Set();
+            if (!NativeMethods.SetEvent(Event)) {
+                throw new Win32Exception();
+            }
         }
 
         public void Clear() {
@@ -36,7 +47,7 @@ namespace NetChan {
             get { return Item.IsSome ? (object)Item.Value : null; }
         }
 
-        AutoResetEvent IWaiter.Event {
+        IntPtr IWaiter.Event {
             get { return Event; }
         }
 
@@ -44,7 +55,7 @@ namespace NetChan {
 
     public interface IWaiter {
         object Item { get; }
-        AutoResetEvent Event { get; }
+        IntPtr Event { get; }
     }
 
     public class Sync {

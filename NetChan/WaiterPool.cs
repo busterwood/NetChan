@@ -24,7 +24,7 @@ namespace NetChan {
         public static Waiter<T> Get() {
             Waiter<T> s;
             if (pool == null || pool.Count == 0) {
-                s = new Waiter<T>(new AutoResetEvent(false));
+                s = new Waiter<T>();
             } else {
                 s = pool.Pop();
             }
