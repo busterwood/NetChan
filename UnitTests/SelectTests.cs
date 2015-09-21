@@ -232,6 +232,9 @@ namespace NetChan {
                     if (got.Index < 0) {
                         Assert.IsTrue(got.Index >= 0);
                     }
+                    if (got.Value == null) {
+                        Assert.IsNotNull(got.Value);
+                    }
                     sum += (int)got.Value;
                 }
             });

@@ -31,6 +31,7 @@ namespace NetChan {
             var sync = new Sync();
             Shuffle(readOrder);
             try {
+                var handleCount = 0;
                 foreach (int i in readOrder) {
                     if (chans[i] == null) {
                         Debug.Print("Thread {0}, {1} Recv: channel is null, index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
@@ -41,11 +42,16 @@ namespace NetChan {
                         Debug.Print("Thread {0}, {1} Recv: RecvSelect returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), waiters[i].Item, i);
                         return new Selected(i, waiters[i].Item);
                     }
-                    Debug.Print("Thread {0}, {1} Recv: RecvSelect waiting index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);             
+                    Debug.Print("Thread {0}, {1} Recv: RecvSelect waiting index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
+                    handleCount++;
                 }
-                var handles = new WaitHandle[chans.Count];
-                var handleIdx = new int[chans.Count];
-                var handleCount = 0;
+                if (handleCount == 0) {
+                    throw new InvalidOperationException("All channels are null, select will block forever");
+                }
+                // collect the handles into an array we can pass to WaitAny
+                var handles = new WaitHandle[handleCount];
+                var handleIdx = new int[handleCount];
+                handleCount = 0;
                 for (int i = 0; i < waiters.Length; i++) {
                     if (waiters[i] == null) {
                         continue;
@@ -54,28 +60,20 @@ namespace NetChan {
                     handleIdx[handleCount] = i;
                     handleCount++;
                 }
-                if (handleCount == 0) {
-                    throw new InvalidOperationException("All channels are null, select will block forever");
-                }
-                // some Channels might be null
-                if (handleCount < chans.Count) {
-                    Array.Resize(ref handles, handleCount);
-                }
                 Debug.Print("Thread {0}, {1} Recv, there are {2} wait handles", Thread.CurrentThread.ManagedThreadId, GetType(), handles.Length);
                 int signalled = WaitHandle.WaitAny(handles);
                 Debug.Print("Thread {0}, {1} Recv, woke up after WaitAny", Thread.CurrentThread.ManagedThreadId, GetType());
                 int sig = handleIdx[signalled];
-                var maybe = waiters[sig].Item;
-                Debug.Print("Thread {0}, {1} Recv, sync Set, idx {2}, value {3}", Thread.CurrentThread.ManagedThreadId, GetType(), sig, maybe);
-                return new Selected(sig, maybe);
+                object val = waiters[sig].Item;
+                Debug.Print("Thread {0}, {1} Recv, sync Set, idx {2}, value {3}", Thread.CurrentThread.ManagedThreadId, GetType(), sig, val);
+                return new Selected(sig, val);
             } finally {
                 // release waiters otherwise slow channels will build up
                 for (int i = 0; i < waiters.Length; i++) {
-                    if (waiters[i] == null) {
-                        continue;
+                    if (waiters[i] != null) {
+                        chans[i].RemoveReceiver(waiters[i]);
+                        chans[i].ReleaseWaiter(waiters[i]);
                     }
-                    chans[i].RemoveReceiver(waiters[i]);
-                    chans[i].ReleaseWaiter(waiters[i]);
                 }
             }
             
@@ -100,13 +98,12 @@ namespace NetChan {
                 }
             } finally {
                 for (int i = 0; i < waiters.Length; i++) {
-                    if (waiters[i] == null) {
-                        continue;
+                    if (waiters[i] != null) {
+                        chans[i].ReleaseWaiter(waiters[i]);
                     }
-                    chans[i].ReleaseWaiter(waiters[i]);
                 }
             }
-            return new Selected(-1, Maybe<object>.None());
+            return new Selected(-1, null);
         }
 
         /// <summary>Modern version of the Fisher-Yates shuffle</summary>

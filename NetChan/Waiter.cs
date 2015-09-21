@@ -40,16 +40,11 @@ namespace NetChan {
             get { return Event; }
         }
 
-//        bool IWaiter.SetItem(object v) {
-//            return SetItem((T)v);
-//        }
-
     }
 
     public interface IWaiter {
         object Item { get; }
         AutoResetEvent Event { get; }
-        //bool SetItem(object v);
     }
 
     public class Sync {
