@@ -148,11 +148,11 @@ namespace NetChan {
         public void z0_send_and_select_many_items_from_channel() {
             Benchmark.Go("unbuffered select", (int runs) => {
                 var data = new Channel<int>();
-                new Thread(() => {
+                ThreadPool.QueueUserWorkItem((state) => {
                     for (int i = 0; i < runs; i++) {
                         data.Send(i);
                     }
-                }).Start();
+                });
                 var select = new Select(data);
                 for (int i = 0; i < runs; i++) {
                     Selected got = select.Recv();
@@ -170,11 +170,11 @@ namespace NetChan {
         public void z1_send_and_select_many_items_from_queued_channel() {
             Benchmark.Go("select on buffer of 1", (int runs) => {
                 var data = new Channel<int>(10);
-                new Thread(() => {
+                ThreadPool.QueueUserWorkItem((state) => {
                     for (int i = 0; i < runs; i++) {
                         data.Send(i);
                     }
-                }).Start();
+                });
                 var select = new Select(data);
                 for (int i = 0; i < runs; i++) {
                     Selected got = select.Recv();
@@ -192,11 +192,11 @@ namespace NetChan {
         public void z10_send_and_select_many_items_from_queued_channel() {
             Benchmark.Go("select on buffer of 10", (int runs) => {
                 var data = new Channel<int>(10);
-                new Thread(() => {
+                ThreadPool.QueueUserWorkItem((state) => {
                     for (int i = 0; i < runs; i++) {
                         data.Send(i);
                     }
-                }).Start();
+                });
                 var select = new Select(data);
                 for (int i = 0; i < runs; i++) {
                     Selected got = select.Recv();

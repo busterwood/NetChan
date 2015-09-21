@@ -207,7 +207,7 @@ namespace NetChan {
         bool IUntypedReceiver.RecvSelect(IWaiter w) {
             var r = (Waiter<T>)w;
             lock (sync) {
-                if (itemq != null && !itemq.Empty && Interlocked.CompareExchange(ref r.Sync.Set, 1, 0) == 0) {
+                if (itemq != null && !itemq.Empty && r.Sync.TrySet()) {
                     r.Item = Maybe<T>.Some(itemq.Dequeue());
                     Debug.Print("Thread {0}, {1} RecvSelect, removed {2} from itemq", Thread.CurrentThread.ManagedThreadId, GetType(), r.Item);
                     MoveSendQToItemQ();

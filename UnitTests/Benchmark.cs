@@ -15,14 +15,13 @@ namespace NetChan {
             b.RunN(n, code);
 
 	        // Run the benchmark for at least the specified amount of time.
-            var d = TimeSpan.FromMilliseconds(benchtimeMS);
-	        while (b.Duration < d && n < 1e9) {
+            while (b.ElaspedMS() < benchtimeMS && n < 1e9) {
 		        int last = n;
 		        // Predict required iterations.
 		        if (b.NsPerOp() == 0.0) {
 			        n = 1000 * 1000 * 1000;
 		        } else {
-			        n = (int)((d.TotalMilliseconds * 1000) / b.NsPerOp());
+                    n = (int)((benchtimeMS * 1e6) / b.NsPerOp());
 		        }
 		        // Run more iterations than we think we'll need (1.2x).
 		        // Don't grow too fast in case we had timing errors previously.
@@ -76,7 +75,6 @@ namespace NetChan {
             private Stopwatch sw = new Stopwatch();
             public int N;
             private long totalTicks;
-            public TimeSpan Duration;
             private long startMemory;
             public long totalMemory;
             private TimeSpan startCPU;
@@ -95,11 +93,14 @@ namespace NetChan {
                 totalCPU += Process.GetCurrentProcess().TotalProcessorTime - startCPU;
                 totalMemory += GC.GetTotalMemory(true) - startMemory;
                 totalTicks += sw.ElapsedTicks;
-                Duration += sw.Elapsed;
             }
 
             private double ElaspedNS() {
                 return (totalTicks * 1e9) / (double)Stopwatch.Frequency;
+            }
+
+            public double ElaspedMS() {
+                return (totalTicks * 1000.0) / (double)Stopwatch.Frequency;
             }
 
             public double NsPerOp() {

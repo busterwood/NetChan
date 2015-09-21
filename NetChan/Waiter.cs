@@ -53,7 +53,13 @@ namespace NetChan {
     }
 
     public class Sync {
+        const int Selecting = 0;
+        const int Done = 1;
         public int Set;
+
+        public bool TrySet() {
+            return Interlocked.CompareExchange(ref Set, Done, Selecting) == Selecting;
+        }
     }
 
     class WaiterQ<T> {
@@ -88,7 +94,7 @@ namespace NetChan {
                 }
                 // if the waiter is part of a select and already signaled then ignore it
                 if (w.Sync != null) {
-                    if (Interlocked.CompareExchange(ref w.Sync.Set, 1, 0) != 0) {
+                    if (!w.Sync.TrySet()) {
                         continue;
                     }
                 }

@@ -138,11 +138,11 @@ namespace NetChan {
         public void z10_benchmark_send_and_recieve() {
             Benchmark.Go("queue size 10", (int runs) => {
                 var data = new Channel<int>(100);
-                new Thread(() => {
+                ThreadPool.QueueUserWorkItem((state) => {
                     for (int i = 0; i < runs; i++) {
                         data.Send(i);
                     }
-                }).Start();
+                });
                 for (int i = 0; i < runs; i++) {
                     var got = data.Recv();
                     if (got.IsNone || got.Value != i) {
@@ -156,11 +156,11 @@ namespace NetChan {
         public void z100_benchmark_send_and_recieve() {
             Benchmark.Go("queue size 100", (int runs) => {
                 var data = new Channel<int>(100);
-                new Thread(() => {
+                ThreadPool.QueueUserWorkItem((state) => {
                     for (int i = 0; i < runs; i++) {
                         data.Send(i);
                     }
-                }).Start();
+                });
                 for (int i = 0; i < runs; i++) {
                     var got = data.Recv();
                     if (got.IsNone || got.Value != i) {
@@ -174,11 +174,11 @@ namespace NetChan {
         public void z1000_benchmark_send_and_recieve() {
             Benchmark.Go("queue size 1000", (int runs) => {
                 var data = new Channel<int>(1000);
-                new Thread(() => {
+                ThreadPool.QueueUserWorkItem((state) => {
                     for (int i = 0; i < runs; i++) {
                         data.Send(i);
                     }
-                }).Start();
+                });
                 for (int i = 0; i < runs; i++) {
                     var got = data.Recv();
                     if (got.IsNone || got.Value != i) {
