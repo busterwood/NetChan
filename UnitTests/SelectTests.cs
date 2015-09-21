@@ -138,7 +138,7 @@ namespace NetChan {
                 Assert.AreEqual(true, got.Value, "got.Value");
                 Assert.AreEqual(Maybe<int>.Some(123), ch1.Recv());
             }
-            select[1] = null;
+            select.RemoveAt(1);
             got = select.Recv();
             Assert.AreEqual(0, got.Index, "got.Index, value =" + got.Value);
             Assert.AreEqual(124, got.Value, "got.Value");
@@ -210,6 +210,33 @@ namespace NetChan {
             });
         }
 
+        [Test, Timeout(5000)]
+        public void z_2select_on_two_channels() {
+            Benchmark.Go("select on two channels", (int runs) => {
+                var ch1 = new Channel<int>(100);
+                var ch2 = new Channel<int>(100);
+                ThreadPool.QueueUserWorkItem((state) => {
+                    for (int i = 0; i < runs; i++) {
+                        ch1.Send(i);
+                    }
+                });
+                ThreadPool.QueueUserWorkItem((state) => {
+                    for (int i = 0; i < runs; i++) {
+                        ch2.Send(i);
+                    }
+                });
+                int sum = 0;
+                var select = new Select(ch1, ch2);
+                for (int i = 0; i < runs*2; i++) {
+                    Selected got = select.Recv();
+                    if (got.Index < 0) {
+                        Assert.IsTrue(got.Index >= 0);
+                    }
+                    sum += (int)got.Value;
+                }
+            });
+        }
+
         [Test]
         public void select_on_closed_channel_does_not_block_and_returns_no_value() {
             var ch1 = new Channel<int>(1);
@@ -226,7 +253,7 @@ namespace NetChan {
             var ch2 = new Channel<bool>(2);
             ch2.Send(true);
             var select = new Select(ch1, ch2);
-            select[0] = null;
+            select.RemoveAt(0);
             var got = select.Recv();
             Assert.AreEqual(1, got.Index, "expected any channel to return");
             Assert.AreEqual(true, got.Value);
