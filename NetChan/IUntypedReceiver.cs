@@ -15,7 +15,7 @@ namespace NetChan {
         bool TryRecvSelect(IWaiter w);
 
         /// <summary>Gets a waiter for use in RecvSelect</summary>
-        IWaiter GetWaiter(Sync sync);
+        IWaiter GetWaiter();
 
         /// <summary>Releases the waiter after use</summary>
         void ReleaseWaiter(IWaiter w);

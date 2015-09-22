@@ -19,6 +19,10 @@ namespace NetChan {
         }
 
         ~Waiter() {
+            Dispose();
+        }
+
+        public void Dispose() {
             var e = Event;
             if (e != IntPtr.Zero) {
                 NativeMethods.CloseHandle(e);
@@ -51,11 +55,17 @@ namespace NetChan {
             get { return Event; }
         }
 
+        void IWaiter.Clear(Sync sync) {
+            Sync = sync;
+            Item = Maybe<T>.None();
+            Next = null;
+        }
     }
 
-    public interface IWaiter {
+    public interface IWaiter : IDisposable {
         object Item { get; }
         IntPtr Event { get; }
+        void Clear(Sync sync);
     }
 
     public class Sync {

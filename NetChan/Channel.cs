@@ -203,10 +203,8 @@ namespace NetChan {
         }
 
         /// <summary>Gets a waiter for use in RecvSelect</summary>
-        IWaiter IUntypedReceiver.GetWaiter(Sync s) {
-            var w = WaiterPool<T>.Get();
-            w.Sync = s;
-            return w;
+        IWaiter IUntypedReceiver.GetWaiter() {
+            return WaiterPool<T>.Get();
         }
 
         /// <summary>
@@ -222,7 +220,7 @@ namespace NetChan {
                     MoveSendQToItemQ();
                     return true;                
                 }
-                if (!senders.Empty) {
+                if (senders.First != null && r.Sync.TrySet()) {
                     Waiter<T> s = senders.Dequeue();
                     if (s != null) {
                         Debug.Print("Thread {0}, {1} RecvSelect, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
