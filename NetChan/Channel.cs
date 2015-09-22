@@ -71,8 +71,8 @@ namespace NetChan {
                 if (items.Empty) {
                     Waiter<T> wr = receivers.Dequeue();
                     if (wr != null) {
-                        wr.Item = Maybe<T>.Some(v);
-                        Debug.Print("Thread {0}, {1} Send({2}), SetItem suceeded", Thread.CurrentThread.ManagedThreadId, GetType(), wr.Item);
+                        wr.Value = Maybe<T>.Some(v);
+                        Debug.Print("Thread {0}, {1} Send({2}), SetItem suceeded", Thread.CurrentThread.ManagedThreadId, GetType(), wr.Value);
                         wr.Wakeup();
                         return;
                     }
@@ -101,8 +101,8 @@ namespace NetChan {
                 if (items.Empty) {
                     Waiter<T> wr = receivers.Dequeue();
                     if (wr != null) {
-                        wr.Item = Maybe<T>.Some(v);
-                        Debug.Print("Thread {0}, {1} TrySend({2}), waking up reveiver", Thread.CurrentThread.ManagedThreadId, GetType(), wr.Item);
+                        wr.Value = Maybe<T>.Some(v);
+                        Debug.Print("Thread {0}, {1} TrySend({2}), waking up reveiver", Thread.CurrentThread.ManagedThreadId, GetType(), wr.Value);
                         wr.Wakeup();
                         return true;
                     }
@@ -131,7 +131,7 @@ namespace NetChan {
                     Waiter<T> s = senders.Dequeue();
                     if (s != null) {
                         Debug.Print("Thread {0}, {1} Recv, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
-                        var mv = s.Item;
+                        var mv = s.Value;
                         s.Wakeup();
                         return mv;
                     }
@@ -147,7 +147,7 @@ namespace NetChan {
             Debug.Print("Thread {0}, {1} Recv, waiting", Thread.CurrentThread.ManagedThreadId, GetType());
             r.WaitOne();
             Debug.Print("Thread {0}, {1} Recv, woke up", Thread.CurrentThread.ManagedThreadId, GetType());
-            var v = r.Item;
+            var v = r.Value;
             WaiterPool<T>.Put(r);
             return v;
         }
@@ -156,7 +156,7 @@ namespace NetChan {
             if (!senders.Empty) {
                 Waiter<T> s = senders.Dequeue();
                 if (s != null) {
-                    items.Enqueue(s.Item.Value);
+                    items.Enqueue(s.Value.Value);
                     Debug.Print("Thread {0}, {1} MoveSendQToItemQ, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
                     s.Wakeup();
                 }
@@ -174,8 +174,8 @@ namespace NetChan {
                 if (!senders.Empty) {
                     Waiter<T> s = senders.Dequeue();
                     if (s != null) {
-                        Debug.Print("Thread {0}, {1} Recv, waking sender, item {2}", Thread.CurrentThread.ManagedThreadId, GetType(), s.Item);
-                        var mv = s.Item;
+                        Debug.Print("Thread {0}, {1} Recv, waking sender, item {2}", Thread.CurrentThread.ManagedThreadId, GetType(), s.Value);
+                        var mv = s.Value;
                         s.Wakeup();
                         return mv;
                     }
@@ -215,8 +215,8 @@ namespace NetChan {
             var r = (Waiter<T>)w;
             lock (sync) {
                 if (!items.Empty && r.Sync.TrySet()) {
-                    r.Item = Maybe<T>.Some(items.Dequeue());
-                    Debug.Print("Thread {0}, {1} RecvSelect, removed {2} from itemq", Thread.CurrentThread.ManagedThreadId, GetType(), r.Item);
+                    r.Value = Maybe<T>.Some(items.Dequeue());
+                    Debug.Print("Thread {0}, {1} RecvSelect, removed {2} from itemq", Thread.CurrentThread.ManagedThreadId, GetType(), r.Value);
                     MoveSendQToItemQ();
                     return true;                
                 }
@@ -224,7 +224,7 @@ namespace NetChan {
                     Waiter<T> s = senders.Dequeue();
                     if (s != null) {
                         Debug.Print("Thread {0}, {1} RecvSelect, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
-                        r.Item = s.Item;
+                        r.Value = s.Value;
                         s.Wakeup();
                         return true;
                     }
@@ -242,8 +242,8 @@ namespace NetChan {
             var r = (Waiter<T>)w;
             lock (sync) {
                 if (!items.Empty) {
-                    r.Item = Maybe<T>.Some(items.Dequeue());
-                    Debug.Print("Thread {0}, {1} TryRecvSelect, removed {2} from itemq", Thread.CurrentThread.ManagedThreadId, GetType(), r.Item);
+                    r.Value = Maybe<T>.Some(items.Dequeue());
+                    Debug.Print("Thread {0}, {1} TryRecvSelect, removed {2} from itemq", Thread.CurrentThread.ManagedThreadId, GetType(), r.Value);
                     MoveSendQToItemQ();
                     return true;                    
                 }
@@ -251,7 +251,7 @@ namespace NetChan {
                     Waiter<T> s = senders.Dequeue();
                     if (s != null) {
                         Debug.Print("Thread {0}, {1} RecvSelect, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
-                        r.Item = s.Item;
+                        r.Value = s.Value;
                         s.Wakeup();
                         return true;
                     }

@@ -5,11 +5,12 @@ using System.Threading;
 
 namespace NetChan {
 ﻿
-    internal class Waiter<T> : IWaiter {
+    internal class Waiter<T> : IWaiter, ISelected<T> {
         public Sync Sync;       // used by Select.Recv to ensure only one channel is read
-        public Maybe<T> Item;   // the value that has been read (or the value being sent)
+        public Maybe<T> Value;   // the value that has been read (or the value being sent)
         public IntPtr Event;    // autoreset event handle, 20% faster than using the .NET wrapper
         public Waiter<T> Next;  // next item in a linked list (queue)
+        private int index;
 
         public Waiter() {
             Event = NativeMethods.CreateEvent(IntPtr.Zero, false, false, IntPtr.Zero);
@@ -19,10 +20,6 @@ namespace NetChan {
         }
 
         ~Waiter() {
-            Dispose();
-        }
-
-        public void Dispose() {
             var e = Event;
             if (e != IntPtr.Zero) {
                 NativeMethods.CloseHandle(e);
@@ -43,29 +40,57 @@ namespace NetChan {
 
         public void Clear() {
             Sync = null;
-            Item = Maybe<T>.None();
+            Value = Maybe<T>.None();
+            Next = null;
+            index = -1;
+        }
+
+        int IWaiter.Index {
+            get { return index; }
+            set { index = value; }
+        }
+
+        void IWaiter.Clear(Sync sync) {
+            Sync = sync;
+            Value = Maybe<T>.None();
             Next = null;
         }
 
-        object IWaiter.Item {
-            get { return Item.IsSome ? (object)Item.Value : null; }
+        Maybe<T> ISelected<T>.Value {
+            get { return Value; }
+        }
+
+        int ISelected<T>.Index {
+            get { return index; }
+        }
+
+        object ISelected.Value {
+            get { return Value.IsSome ? (object)Value.Value : null;; }
+        }
+
+        int ISelected.Index {
+            get { return index; }
         }
 
         IntPtr IWaiter.Event {
             get { return Event; }
         }
-
-        void IWaiter.Clear(Sync sync) {
-            Sync = sync;
-            Item = Maybe<T>.None();
-            Next = null;
-        }
     }
 
-    public interface IWaiter : IDisposable {
-        object Item { get; }
+    public interface IWaiter : ISelected {
+        int Index { get; set; }
         IntPtr Event { get; }
         void Clear(Sync sync);
+    }
+
+    public interface ISelected {
+        int Index { get; }
+        object Value { get; }        
+    }
+
+    public interface ISelected<T> {
+        int Index { get; }
+        Maybe<T> Value { get; }
     }
 
     public class Sync {

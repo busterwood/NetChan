@@ -17,7 +17,7 @@ namespace NetChan {
 
         public static Waiter<T> Get(T v) {
             Waiter<T> s = Get();
-            s.Item = Maybe<T>.Some(v);
+            s.Value = Maybe<T>.Some(v);
             return s;
         }
 

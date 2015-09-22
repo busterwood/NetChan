@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Security;
-using System.Text;
 
 namespace NetChan {
 
@@ -23,7 +21,7 @@ namespace NetChan {
         [DllImport("Kernel32.dll", SetLastError = true)]
         public static extern int WaitForMultipleObjects(
             int count,
-            [MarshalAs(UnmanagedType.LPArray, SizeParamIndex=0)] IntPtr[] handles,
+            [In, MarshalAs(UnmanagedType.LPArray, SizeParamIndex=0)] IntPtr[] handles,
             bool waitAll,
             int milliseconds
         );

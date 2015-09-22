@@ -147,7 +147,7 @@ namespace NetChan {
                     Assert.AreEqual(true, got.Value, "got.Value");
                     Assert.AreEqual(Maybe<int>.Some(123), ch1.Recv());
                 }
-                select.RemoveAt(1);
+                select.ClearAt(1);
                 got = select.Recv();
                 Assert.AreEqual(0, got.Index, "got.Index, value =" + got.Value);
                 Assert.AreEqual(124, got.Value, "got.Value");
@@ -165,12 +165,13 @@ namespace NetChan {
                 });
                 using (var select = new Select(data)) {
                     for (int i = 0; i < runs; i++) {
-                        Selected got = select.Recv();
+                        ISelected got = select.Recv();
                         if (got.Index != 0) {
                             Assert.AreEqual(0, got.Index);
                         }
-                        if (!(got.Value is int) || ((int) got.Value != i)) {
-                            Assert.AreEqual(i, got.Value);
+                        var gotInt = (ISelected<int>) got;
+                        if (gotInt.Value.Value != i) {
+                            Assert.AreEqual(Maybe<int>.Some(i), got.Value);
                         }
                     }
                 }
@@ -188,12 +189,13 @@ namespace NetChan {
                 });
                 using (var select = new Select(data)) {
                     for (int i = 0; i < runs; i++) {
-                        Selected got = select.Recv();
+                        ISelected got = select.Recv();
                         if (got.Index != 0) {
                             Assert.AreEqual(0, got.Index);
                         }
-                        if (!(got.Value is int) || ((int)got.Value != i)) {
-                            Assert.AreEqual(i, got.Value);
+                        var gotInt = (ISelected<int>)got;
+                        if (gotInt.Value.Value != i) {
+                            Assert.AreEqual(Maybe<int>.Some(i), got.Value);
                         }
                     }
                 }
@@ -211,18 +213,66 @@ namespace NetChan {
                 });
                 using (var select = new Select(data)) {
                     for (int i = 0; i < runs; i++) {
-                        Selected got = select.Recv();
+                        var got = select.Recv();
                         if (got.Index != 0) {
                             Assert.AreEqual(0, got.Index);
                         }
-                        if (!(got.Value is int) || ((int)got.Value != i)) {
-                            Assert.AreEqual(i, got.Value);
+                        var gotInt = (ISelected<int>)got;
+                        if (gotInt.Value.Value != i) {
+                            Assert.AreEqual(Maybe<int>.Some(i), got.Value);
                         }
                     }
                 }
             });
         }
 
+        [Test, Timeout(3000)]
+        public void z100_send_and_select_many_items_from_queued_channel() {
+            Benchmark.Go("select on buffer of 100", (int runs) => {
+                var data = new Channel<int>(100);
+                ThreadPool.QueueUserWorkItem((state) => {
+                    for (int i = 0; i < runs; i++) {
+                        data.Send(i);
+                    }
+                });
+                using (var select = new Select(data)) {
+                    for (int i = 0; i < runs; i++) {
+                        var got = select.Recv();
+                        if (got.Index != 0) {
+                            Assert.AreEqual(0, got.Index);
+                        }
+                        var gotInt = (ISelected<int>)got;
+                        if (gotInt.Value.Value != i) {
+                            Assert.AreEqual(Maybe<int>.Some(i), got.Value);
+                        }
+                    }
+                }
+            });
+        }
+
+        [Test, Timeout(3000)]
+        public void z1000_send_and_select_many_items_from_queued_channel() {
+            Benchmark.Go("select on buffer of 1000", (int runs) => {
+                var data = new Channel<int>(1000);
+                ThreadPool.QueueUserWorkItem((state) => {
+                    for (int i = 0; i < runs; i++) {
+                        data.Send(i);
+                    }
+                });
+                using (var select = new Select(data)) {
+                    for (int i = 0; i < runs; i++) {
+                        var got = select.Recv();
+                        if (got.Index != 0) {
+                            Assert.AreEqual(0, got.Index);
+                        }
+                        var gotInt = (ISelected<int>)got;
+                        if (gotInt.Value.Value != i) {
+                            Assert.AreEqual(Maybe<int>.Some(i), got.Value);
+                        }
+                    }
+                }
+            });
+        }
         [Test, Timeout(5000)]
         public void z_2select_on_two_channels() {
             Benchmark.Go("select on two channels", (int runs) => {
@@ -244,14 +294,16 @@ namespace NetChan {
                     int max = runs*2;
                     for (int i = 0; i < max; i++) {
                         count++;
-                        Selected got = select.Recv();
+                        var got = select.Recv();
                         if (got.Index < 0) {
                             Assert.IsTrue(got.Index >= 0);
                         }
-                        if (got.Value == null) {
-                            Assert.IsNotNull(got.Value, "runs = " + runs + ", count = " + count);
+                        var gotInt = (ISelected<int>)got;
+                        Maybe<int> val = gotInt.Value;
+                        if (val.IsNone) {
+                            Assert.AreNotEqual(Maybe<int>.None(), got.Value);
                         }
-                        sum += (int)got.Value;
+                        sum += val.Value;
                     }
                 }
             });
@@ -274,7 +326,7 @@ namespace NetChan {
             var ch2 = new Channel<bool>(2);
             ch2.Send(true);
             using (var select = new Select(ch1, ch2)) {
-                select.RemoveAt(0);
+                select.ClearAt(0);
                 var got = select.Recv();
                 Assert.AreEqual(1, got.Index, "expected any channel to return");
                 Assert.AreEqual(true, got.Value);
