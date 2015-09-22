@@ -127,14 +127,12 @@ namespace NetChan {
                     MoveSendQToItemQ();
                     return Maybe<T>.Some(value);
                 }
-                if (!senders.Empty) {
-                    Waiter<T> s = senders.Dequeue();
-                    if (s != null) {
-                        Debug.Print("Thread {0}, {1} Recv, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
-                        var mv = s.Value;
-                        s.Wakeup();
-                        return mv;
-                    }
+                Waiter<T> s = senders.Dequeue();
+                if (s != null) {
+                    Debug.Print("Thread {0}, {1} Recv, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
+                    var mv = s.Value;
+                    s.Wakeup();
+                    return mv;
                 }
                 if (closed) {
                     Debug.Print("Thread {0}, {1} Recv, Channel is closed", Thread.CurrentThread.ManagedThreadId, GetType());
@@ -171,14 +169,12 @@ namespace NetChan {
                     MoveSendQToItemQ();
                     return Maybe<T>.Some(v);
                 }
-                if (!senders.Empty) {
-                    Waiter<T> s = senders.Dequeue();
-                    if (s != null) {
-                        Debug.Print("Thread {0}, {1} Recv, waking sender, item {2}", Thread.CurrentThread.ManagedThreadId, GetType(), s.Value);
-                        var mv = s.Value;
-                        s.Wakeup();
-                        return mv;
-                    }
+                Waiter<T> s = senders.Dequeue();
+                if (s != null) {
+                    Debug.Print("Thread {0}, {1} Recv, waking sender, item {2}", Thread.CurrentThread.ManagedThreadId, GetType(), s.Value);
+                    var mv = s.Value;
+                    s.Wakeup();
+                    return mv;
                 }
                 return Maybe<T>.None();
             }

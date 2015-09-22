@@ -154,7 +154,7 @@ namespace NetChan {
             }
         }
 
-        [Test, Timeout(3000)]
+        [Test, Timeout(5000)]
         public void z0_send_and_select_many_items_from_channel() {
             Benchmark.Go("unbuffered select", (int runs) => {
                 var data = new Channel<int>();

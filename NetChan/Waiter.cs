@@ -60,10 +60,6 @@ namespace NetChan {
             get { return Value; }
         }
 
-        int ISelected<T>.Index {
-            get { return index; }
-        }
-
         object ISelected.Value {
             get { return Value.IsSome ? (object)Value.Value : null;; }
         }
@@ -88,9 +84,8 @@ namespace NetChan {
         object Value { get; }        
     }
 
-    public interface ISelected<T> {
-        int Index { get; }
-        Maybe<T> Value { get; }
+    public interface ISelected<T> : ISelected {
+        new Maybe<T> Value { get; }
     }
 
     public class Sync {
