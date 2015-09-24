@@ -46,5 +46,13 @@ namespace NetChan {
             }
             return hc;
         }
+
+        public static bool operator ==(Maybe<T> left, Maybe<T> right) {
+            return left.Equals(right);
+        }
+
+        public static bool operator !=(Maybe<T> left, Maybe<T> right) {
+            return !left.Equals(right);
+        }
     }
 }

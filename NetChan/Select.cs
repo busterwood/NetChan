@@ -1,6 +1,5 @@
 ﻿// Copyright the Netchan authors, see LICENSE.txt for permitted use
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -8,10 +7,14 @@ using System.Threading;
 
 namespace NetChan {
     /// <summary>Select receives from one or more channels</summary>
-    public class Select  {
+    public class Select : IDisposable {
         private readonly Random rand = new Random(Environment.TickCount);
         private readonly int[] readOrder;
         private readonly List<IUntypedReceiver> chans;
+        private readonly IWaiter[] waiters;
+        private IntPtr[] handles;
+        private int[] handleIdx;
+        private readonly Sync sync;
 
         public Select(params IUntypedReceiver[] chans) {
             readOrder = new int[chans.Length];
@@ -19,30 +22,44 @@ namespace NetChan {
                 readOrder[i] = i;
             }
             this.chans = new List<IUntypedReceiver>(chans);
+
+            waiters = new IWaiter[chans.Length];
+            for (int i = 0; i < chans.Length; i++) {
+                if (chans[i] == null) {
+                    Debug.Print("Thread {0}, {1} Recv: channel is null, index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
+                    continue;
+                }
+                waiters[i] = chans[i].GetWaiter();
+            }
+            handles = new IntPtr[chans.Length];
+            handleIdx = new int[chans.Length];
+            sync = new Sync();
         }
 
-        public void RemoveAt(int i) {
+        public void ClearAt(int i) {
+            if (chans[i] != null && waiters[i] != null) {
+                chans[i].ReleaseWaiter(waiters[i]);
+                waiters[i] = null;
+            }
             chans[i] = null;
         }
 
         /// <summary>Blocking, non-deterministic read of many channels</summary>
         /// <returns>The index of the channel that was read, or -1 if no channels are ready to read</returns>
-        public Selected Recv() {
-            var waiters = new IWaiter[chans.Count];
-            var sync = new Sync();
+        public ISelected Recv() {
             Shuffle(readOrder);
             try {
+                sync.Set = 0;
                 var handleCount = 0;
                 foreach (int i in readOrder) {
-                    if (chans[i] == null) {
-                        Debug.Print("Thread {0}, {1} Recv: channel is null, index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
+                    if (waiters[i] == null) {
                         continue;
-                    }
-                    waiters[i] = chans[i].GetWaiter(sync);
+                    }                    
+                    waiters[i].Clear(sync);
+                    waiters[i].Index = i;
                     if (chans[i].RecvSelect(waiters[i])) {
-                        var v1 = waiters[i].Item;
-                        Debug.Print("Thread {0}, {1} Recv: RecvSelect returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), v1, i);
-                        return new Selected(i, v1);
+                        Debug.Print("Thread {0}, {1} Recv: RecvSelect returned index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
+                        return waiters[i];
                     }
                     Debug.Print("Thread {0}, {1} Recv: RecvSelect waiting index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
                     handleCount++;
@@ -50,65 +67,60 @@ namespace NetChan {
                 if (handleCount == 0) {
                     throw new InvalidOperationException("All channels are null, select will block forever");
                 }
-                // collect the handles into an array we can pass to WaitAny
-                var handles = new IntPtr[handleCount];
-                var handleIdx = new int[handleCount];
-                handleCount = 0;
-                for (int i = 0; i < waiters.Length; i++) {
-                    if (waiters[i] == null) {
-                        continue;
-                    }
-                    handles[handleCount] = waiters[i].Event;
-                    handleIdx[handleCount] = i;
-                    handleCount++;
-                }
-                Debug.Print("Thread {0}, {1} Recv, there are {2} wait handles", Thread.CurrentThread.ManagedThreadId, GetType(), handles.Length);
-                int signalled = NativeMethods.WaitForMultipleObjects(handleCount, handles, false, -1);
-                if (signalled == -1) {
-                    throw new Win32Exception();
-                }
-                Debug.Print("Thread {0}, {1} Recv, woke up after WaitAny", Thread.CurrentThread.ManagedThreadId, GetType());
-                int sig = handleIdx[signalled];
-                object val = waiters[sig].Item;
-                Debug.Print("Thread {0}, {1} Recv, sync Set, idx {2}, value {3}", Thread.CurrentThread.ManagedThreadId, GetType(), sig, val);
-                return new Selected(sig, val);
+                int sig = WaitForSignal(handleCount);
+                Debug.Print("Thread {0}, {1} Recv, sync Set, idx {2}", Thread.CurrentThread.ManagedThreadId, GetType(), sig);
+                return waiters[sig];
             } finally {
                 // release waiters otherwise slow channels will build up
                 for (int i = 0; i < waiters.Length; i++) {
                     if (waiters[i] != null) {
                         chans[i].RemoveReceiver(waiters[i]);
-                        chans[i].ReleaseWaiter(waiters[i]);
                     }
                 }
+            }            
+        }
+
+        private int WaitForSignal(int handleCount) {
+            // collect the handles into an array we can pass to WaitAny
+            if (handleCount < handles.Length) {
+                handles = new IntPtr[handleCount];
+                handleIdx = new int[handleCount];                
             }
-            
+            handleCount = 0;
+            for (int i = 0; i < waiters.Length; i++) {
+                if (waiters[i] == null) {
+                    continue;
+                }
+                handles[handleCount] = waiters[i].Event;
+                handleIdx[handleCount] = i;
+                handleCount++;
+            }
+            Debug.Print("Thread {0}, {1} Recv, there are {2} wait handles", Thread.CurrentThread.ManagedThreadId, GetType(), handles.Length);
+            int signalled = NativeMethods.WaitForMultipleObjects(handleCount, handles, false, -1);
+            if (signalled == -1) {
+                throw new Win32Exception();
+            }
+            Debug.Print("Thread {0}, {1} Recv, woke up after WaitAny", Thread.CurrentThread.ManagedThreadId, GetType());
+            return handleIdx[signalled];
         }
 
         /// <summary>Non-blocking, non-deterministic read of many channels</summary>
         /// <returns>The index of the channel that was read, or -1 if no channels are ready to read</returns>
-        public Selected TryRecv() {
-            var waiters = new IWaiter[chans.Count];
+        public ISelected TryRecv() {
             Shuffle(readOrder);
-            try {
-                foreach (int i in readOrder) {
-                    if (chans[i] == null) {
-                        Debug.Print("Thread {0}, {1} TryRecv: channel is null, index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
-                        continue;
-                    }
-                    waiters[i] = chans[i].GetWaiter(null);
-                    if (chans[i].TryRecvSelect(waiters[i])) {
-                        Debug.Print("Thread {0}, {1} TryRecv: TryRecvSelect returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), waiters[i].Item, i);
-                        return new Selected(i, waiters[i].Item);
-                    }
+            foreach (int i in readOrder) {
+                if (waiters[i] == null) {
+                    Debug.Print("Thread {0}, {1} TryRecv: channel is null, index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
+                    continue;
                 }
-            } finally {
-                for (int i = 0; i < waiters.Length; i++) {
-                    if (waiters[i] != null) {
-                        chans[i].ReleaseWaiter(waiters[i]);
-                    }
+                waiters[i].Clear(null);
+                waiters[i].Index = i;
+                if (chans[i].TryRecvSelect(waiters[i])) {
+                    Debug.Print("Thread {0}, {1} TryRecv: TryRecvSelect returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), waiters[i].Value, i);
+                    return waiters[i];
                 }
             }
-            return new Selected(-1, null);
+            return NotSelected.Instance;
         }
 
         /// <summary>Modern version of the Fisher-Yates shuffle</summary>
@@ -121,17 +133,29 @@ namespace NetChan {
                 array[i] = tmp;
             }
         }
-   
+
+        public void Dispose() {
+            for (int i = 0; i < chans.Count; i++) {
+                if (chans[i] != null) {
+                    chans[i].ReleaseWaiter(waiters[i]);
+                    waiters[i] = null;
+                }
+                chans[i] = null;
+            }
+        }
+
     }
 
+    internal class NotSelected : ISelected {
+        public static readonly NotSelected Instance = new NotSelected();
 
-    public struct Selected {
-        public readonly int Index;
-        public readonly object Value;
+        public int Index {
+            get { return -1; }
+        }
 
-        public Selected(int idx, object value) {
-            Index = idx;
-            Value = value;
+        public object Value {
+            get { return null; }
         }
     }
+
 }
