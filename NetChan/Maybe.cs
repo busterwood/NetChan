@@ -1,7 +1,5 @@
 ﻿// Copyright the Netchan authors, see LICENSE.txt for permitted use
 using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace NetChan {
     /// <summary>Optional value (Option monad).  Like Nullable{T} but for classes as well</summary>
@@ -25,10 +23,7 @@ namespace NetChan {
         }
 
         public bool Equals(Maybe<T> other) {
-            if (IsNone) {
-                return other.IsNone;
-            }
-            return Value.Equals(other.Value);
+            return IsNone ? other.IsNone : Value.Equals(other.Value);
         }
 
         public override string ToString() {

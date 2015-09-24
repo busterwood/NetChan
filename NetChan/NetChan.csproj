@@ -37,12 +37,12 @@
   <ItemGroup>
     <Compile Include="CircularQueue.cs" />
     <Compile Include="ClosedChannelException.cs" />
-    <Compile Include="IUntypedReceiver.cs" />
+    <Compile Include="IChannel.cs" />
     <Compile Include="Maybe.cs" />
     <Compile Include="NativeMethods.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Channel.cs" />
-    <Compile Include="Select.cs" />
+    <Compile Include="Channels.cs" />
     <Compile Include="Time.cs" />
     <Compile Include="Waiter.cs" />
     <Compile Include="WaiterPool.cs" />

@@ -7,7 +7,7 @@ using System.Threading;
 
 namespace NetChan {
 ﻿
-    public class Channel<T> : IUntypedReceiver, IEnumerable<T> {
+    public class Channel<T> : IChannel, IEnumerable<T> {
         private readonly object sync = new object();
         private readonly WaiterQ<T> receivers = new WaiterQ<T>();
         private readonly WaiterQ<T> senders = new WaiterQ<T>();
@@ -199,7 +199,7 @@ namespace NetChan {
         }
 
         /// <summary>Gets a waiter for use in RecvSelect</summary>
-        IWaiter IUntypedReceiver.GetWaiter() {
+        IWaiter IChannel.GetWaiter() {
             return WaiterPool<T>.Get();
         }
 
@@ -207,7 +207,7 @@ namespace NetChan {
         /// Try to receive and value and write it <paramref name="w"/>. If it can be recieved straight away then it returns TRUE, 
         /// else registers a waiting reciever and returns FALSE.
         /// </summary>
-        bool IUntypedReceiver.RecvSelect(IWaiter w) {
+        bool IChannel.Recv(IWaiter w) {
             var r = (Waiter<T>)w;
             lock (sync) {
                 if (!items.Empty && r.Sync.TrySet()) {
@@ -226,6 +226,7 @@ namespace NetChan {
                     }
                 }
                 if (closed) {
+                    // closed channels return no value and dont block
                     return true;
                 }
                 receivers.Enqueue(r);
@@ -234,7 +235,7 @@ namespace NetChan {
         }
 
         /// <summary>Try to receive without blocking</summary>
-        bool IUntypedReceiver.TryRecvSelect(IWaiter w) {
+        bool IChannel.TryRecv(IWaiter w) {
             var r = (Waiter<T>)w;
             lock (sync) {
                 if (!items.Empty) {
@@ -252,18 +253,73 @@ namespace NetChan {
                         return true;
                     }
                 }
+                if (closed) {
+                    // closed channels return no value and dont block
+                    return true;
+                }
                 Debug.Print("Thread {0}, {1} TryRecvSelect, itemq and sendq are empty", Thread.CurrentThread.ManagedThreadId, GetType());
                 return false;
             }
         }
 
-        void IUntypedReceiver.RemoveReceiver(IWaiter w) {
+        bool IChannel.Send(IWaiter w) {
+            var s = (Waiter<T>)w;
+            Debug.Assert(s.Value.IsSome);
+            lock (sync) {
+                if (closed) {
+                    throw new ClosedChannelException("You cannot send on a closed Channel");
+                }
+                if (items.Empty) {
+                    Waiter<T> wr = receivers.Dequeue();
+                    if (wr != null) {
+                        wr.Value = s.Value;
+                        Debug.Print("Thread {0}, {1} Send({2}), SetItem suceeded", Thread.CurrentThread.ManagedThreadId, GetType(), wr.Value);
+                        wr.Wakeup();
+                        return true;
+                    }
+                }
+                if (!items.Full) {
+                    Debug.Print("Thread {0}, {1} Send({2}), spare capacity, adding to itemq", Thread.CurrentThread.ManagedThreadId, GetType(), s.Value.Value);
+                    items.Enqueue(s.Value.Value);
+                    return true;
+                }
+                // at capacity, queue our waiter until some capacity is freed up by a recv
+                senders.Enqueue(s);
+                return false;
+            }
+        }
+
+        bool IChannel.TrySend(IWaiter w) {
+            var s = (Waiter<T>) w;
+            lock (sync) {
+                if (closed) {
+                    return false;
+                }
+                if (items.Empty) {
+                    Waiter<T> wr = receivers.Dequeue();
+                    if (wr != null) {
+                        wr.Value = s.Value;
+                        Debug.Print("Thread {0}, {1} TrySend({2}), waking up reveiver", Thread.CurrentThread.ManagedThreadId, GetType(), wr.Value);
+                        wr.Wakeup();
+                        return true;
+                    }
+                }
+                if (!items.Full) {
+                    Debug.Print("Thread {0}, {1} TrySend({2}), add item to queue", Thread.CurrentThread.ManagedThreadId, GetType(), s.Value.Value);
+                    items.Enqueue(s.Value.Value);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        void IChannel.RemoveReceiver(IWaiter w) {
             var r = (Waiter<T>)w;
             lock (sync) {
                 receivers.Remove(r);
             }
         }
-        void IUntypedReceiver.ReleaseWaiter(IWaiter h) {
+        void IChannel.ReleaseWaiter(IWaiter h) {
             WaiterPool<T>.Put((Waiter<T>)h);
         }
         
