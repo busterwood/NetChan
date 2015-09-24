@@ -56,12 +56,19 @@ namespace NetChan {
             Next = null;
         }
 
+        void IWaiter.SetSync(Sync sync) {
+            Sync = sync;
+            Next = null;
+        }
+
         Maybe<T> ISelected<T>.Value {
             get { return Value; }
+            set { Value = value; }
         }
 
         object ISelected.Value {
-            get { return Value.IsSome ? (object)Value.Value : null;; }
+            get { return Value.IsSome ? (object)Value.Value : null; }
+            set { Value = value == null ? Maybe<T>.None() : Maybe<T>.Some((T) value); }
         }
 
         int ISelected.Index {
@@ -74,18 +81,19 @@ namespace NetChan {
     }
 
     public interface IWaiter : ISelected {
-        int Index { get; set; }
+        new int Index { get; set; }
         IntPtr Event { get; }
         void Clear(Sync sync);
+        void SetSync(Sync sync);
     }
 
     public interface ISelected {
         int Index { get; }
-        object Value { get; }        
+        object Value { get; set; }
     }
 
     public interface ISelected<T> : ISelected {
-        new Maybe<T> Value { get; }
+        new Maybe<T> Value { get; set; }
     }
 
     public class Sync {

@@ -130,8 +130,8 @@ namespace NetChan {
             var data = new Channel<int>();
             var quit = new Channel<bool>();
             ThreadPool.QueueUserWorkItem(state => data.Send(123));
-            var select = new Select(data, quit);
-            var got = select.Recv();
+            var select = new Channels(Op.Recv(data), Op.Recv(quit));
+            var got = select.Select();
             Assert.AreEqual(0, got.Index);
             Assert.AreEqual(123, got.Value);
         }
@@ -141,8 +141,8 @@ namespace NetChan {
             var data = new Channel<int>();
             var quit = new Channel<bool>();
             ThreadPool.QueueUserWorkItem(state => quit.Send(true));
-            var select = new Select(data, quit);
-            var got = select.Recv();
+            var select = new Channels(Op.Recv(data), Op.Recv(quit));
+            var got = select.Select();
             Assert.AreEqual(1, got.Index);
             Assert.AreEqual(true, got.Value);
         }
