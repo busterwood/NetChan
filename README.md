@@ -29,7 +29,7 @@ Test            | Test ops   | ops/sec   | ns/op | User Secs | Kernal Secs
 unbuffered      | 300,000    | 224,810   | 4448  | 0.33      |  0.23
 queue size 10   | 10,000,000 | 7,995,875 |  125  | 1.47      | 0.16
 queue size 100  | 20,000,000 | 7,930,553 |  126  | 2.23 | 0.34
-queue size 1000 | 20,000,000 | 8,155,971 |  122  | 3.48 | 0.11
+queue size 1000 | 20,000,000 | __8,155,971__ |  122  | 3.48 | 0.11
 select on two channels   | 3,000,000  | 1,014,302 | 985 | 3.09 | 1.06
 unbuffered select        | 1,000,000  | 465,937   | 2146 | 0.78 | 1.28
 select on buffer of 1    | 2,000,000  | 673,919   | 1483 | 0.66 | 0.39
