@@ -15,6 +15,7 @@ namespace NetChan {
             // force a full GC before test, so any GCs that do happen are do to the code being run
             GC.Collect();
 
+
 	        // Run the benchmark for a single iteration in case it's expensive.
 	        int n = 1;
             var b = new B();
@@ -37,7 +38,7 @@ namespace NetChan {
 		        n = RoundUp(n);
 		        b.RunN(n, code);
 	        }
-            Console.WriteLine("{4}: {0:#,##0}, {1:0.00} ns/op, {2:0.00} User, {3:0.00} Kernel {5}", b.N, b.NsPerOp(), b.TotalCpu.User.TotalSeconds, b.TotalCpu.Kernel.TotalSeconds, name, b.TotalGCs);
+            Console.WriteLine("{4}: {0:#,##0}, {6:#,##0.0}ops/sec, {1:0.00} ns/op, {2:0.00} User, {3:0.00} Kernel {5}", b.N, b.NsPerOp(), b.TotalCpu.User.TotalSeconds, b.TotalCpu.Kernel.TotalSeconds, name, b.TotalGCs, b.N / (b.ElaspedMS() / 1000.0));
         }
 
         static int Max(int x, int y) {
@@ -88,7 +89,7 @@ namespace NetChan {
             
             public void Start() {
                 if (sw.IsRunning) return;
-                startCPU = NativeMethod.GetProcessTime();
+                startCPU = NativeMethods.GetProcessTime();
                 startGCs = GcCount.Now();
                 sw.Start();
             }
@@ -96,24 +97,24 @@ namespace NetChan {
             public void Stop() {
                 if (!sw.IsRunning) return;
                 sw.Stop();
-                TotalCpu += NativeMethod.GetProcessTime() - startCPU;
+                TotalCpu += NativeMethods.GetProcessTime() - startCPU;
                 TotalGCs += GcCount.Now() - startGCs;
                 totalTicks += sw.ElapsedTicks;
             }
 
             private double ElaspedNS() {
-                return (totalTicks * 1e9) / (double)Stopwatch.Frequency;
+                return (totalTicks * 1e9) / Stopwatch.Frequency;
             }
 
             public double ElaspedMS() {
-                return (totalTicks * 1000.0) / (double)Stopwatch.Frequency;
+                return (totalTicks * 1000.0) / Stopwatch.Frequency;
             }
 
             public double NsPerOp() {
                 if (N <= 0) {
                     return 0.0;
                 }   
-                return ElaspedNS() / (double)N;
+                return ElaspedNS() / N;
             }
 
             public void RunN(int n, Action<int> code) {
@@ -128,7 +129,7 @@ namespace NetChan {
         }
     }
 
-    internal static class NativeMethod {
+    internal static class NativeMethods {
         [DllImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool GetProcessTimes(IntPtr hProcess, out FILETIME creation, out FILETIME exit, out FILETIME kernel, out FILETIME user);
