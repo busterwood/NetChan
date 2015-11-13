@@ -21,6 +21,7 @@ Recieves over one of many channels is support via the `Select` class, which is a
 # Performance
 
 The following show the results of a simple `int` channel producer and consumer on an Intel i7-2600S
+
 Test            | Test ops   | ops/sec   | ns/op | User Secs | Kernal Secs 
 ----------------|------------|-----------|-------|-----------|--------------
 unbuffered      | 300,000    | 224,810   | 4448  | 0.33      |  0.23
