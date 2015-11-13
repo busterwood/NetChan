@@ -20,7 +20,7 @@ Recieves over one of many channels is support via the `Select` class, which is a
 
 # Performance
 
-NetChan can send and recieve up to 8 million messages per second on an  Intel i7-2600S (cica 2012).
+NetChan can send and recieve up to 8 million messages per second on an  Intel i7 (cica 2012).
 
 The following show the results of a simple `int` channel producer and consumer on an Intel i7-2600S:
 
