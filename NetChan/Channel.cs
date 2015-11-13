@@ -7,7 +7,7 @@ using System.Threading;
 
 namespace NetChan {
 ﻿
-    public class Channel<T> : IChannel, IEnumerable<T> {
+    public sealed class Channel<T> : IChannel, IEnumerable<T> {
         private readonly object sync = new object();
         private readonly WaiterQ<T> receivers = new WaiterQ<T>();
         private readonly WaiterQ<T> senders = new WaiterQ<T>();

@@ -6,7 +6,7 @@ using System.Threading;
 
 namespace NetChan {
     /// <summary>Send and/or Recieve operations over many channels</summary>
-    public class Channels : IDisposable {
+    public sealed class Channels : IDisposable {
         private readonly Random rand = new Random(Environment.TickCount);
         private readonly Op[] ops;
         private readonly int[] pollOrder;
