@@ -14,6 +14,11 @@ namespace NetChan {
         private readonly CircularQueue<T> items;
         private bool closed;
 
+        public bool Closed
+        {
+            get { return closed; }
+        }
+
         public int Capacity {
             get { return items.Capacity; }
         }
