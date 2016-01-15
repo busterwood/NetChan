@@ -8,7 +8,7 @@ namespace NetChan {
     public class ChannelTests {
 
         [Test]
-        public void trySend_returns_false_if_no_recievers() {
+        public void trySend_returns_false_if_no_receivers() {
             var ch = new Channel<bool>();
             Assert.IsFalse(ch.TrySend(true));
         }
@@ -19,8 +19,8 @@ namespace NetChan {
             var start = Environment.TickCount;
             ThreadPool.QueueUserWorkItem(state => { Thread.Sleep(123); ch.Recv(); });
             ch.Send(true);
-            var elasped = Environment.TickCount - start;
-            Assert.IsTrue(elasped > 100, "Elasped " + elasped);
+            var elapsed = Environment.TickCount - start;
+            Assert.IsTrue(elapsed > 100, "Elapsed " + elapsed);
         }
 
         [Test]
@@ -29,8 +29,8 @@ namespace NetChan {
             var start = Environment.TickCount;
             ThreadPool.QueueUserWorkItem(state => { Thread.Sleep(123); ch.Send(true); });
             ch.Recv();
-            var elasped = Environment.TickCount - start;
-            Assert.IsTrue(elasped > 100, "Elasped " + elasped);
+            var elapsed = Environment.TickCount - start;
+            Assert.IsTrue(elapsed > 100, "Elapsed " + elapsed);
         }
 
         [Test, Timeout(100)]

@@ -1,10 +1,6 @@
 // Copyright the Netchan authors, see LICENSE.txt for permitted use
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Runtime.Serialization;
-using System.Threading;
 
 namespace NetChan {
     /// <summary>Thread static pool of Waiters for type {T}</summary>

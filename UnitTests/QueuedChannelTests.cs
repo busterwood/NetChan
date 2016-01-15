@@ -119,8 +119,8 @@ namespace NetChan {
             var start = Environment.TickCount;
             ThreadPool.QueueUserWorkItem(state => { Thread.Sleep(50); ch.Recv(); });
             ch.Send(true);
-            var elasped = Environment.TickCount - start;
-            Assert.IsTrue(elasped < 50, "Elasped " + elasped);
+            var elapsed = Environment.TickCount - start;
+            Assert.IsTrue(elapsed < 50, "Elapsed " + elapsed);
         }
 
         [Test, Timeout(500)]
@@ -130,12 +130,12 @@ namespace NetChan {
             ThreadPool.QueueUserWorkItem(state => { Thread.Sleep(50); ch.Recv(); Thread.Sleep(100); ch.Recv(); });
             ch.Send(true);
             ch.Send(true);
-            var elasped = Environment.TickCount - start;
-            Assert.IsTrue(elasped >= 40 && elasped < 100, "Elasped " + elasped);
+            var elapsed = Environment.TickCount - start;
+            Assert.IsTrue(elapsed >= 40 && elapsed < 100, "Elapsed " + elapsed);
         }
 
         [Test, Timeout(5000)]
-        public void z10_benchmark_send_and_recieve() {
+        public void z10_benchmark_send_and_receive() {
             Benchmark.Go("queue size 10", (int runs) => {
                 var data = new Channel<int>(100);
                 ThreadPool.QueueUserWorkItem((state) => {
@@ -153,7 +153,7 @@ namespace NetChan {
         }
         
         [Test, Timeout(5000)]
-        public void z100_benchmark_send_and_recieve() {
+        public void z100_benchmark_send_and_receive() {
             Benchmark.Go("queue size 100", (int runs) => {
                 var data = new Channel<int>(100);
                 ThreadPool.QueueUserWorkItem((state) => {
@@ -171,7 +171,7 @@ namespace NetChan {
         }
 
         [Test, Timeout(5000)]
-        public void z1000_benchmark_send_and_recieve() {
+        public void z1000_benchmark_send_and_receive() {
             Benchmark.Go("queue size 1000", (int runs) => {
                 var data = new Channel<int>(1000);
                 ThreadPool.QueueUserWorkItem((state) => {

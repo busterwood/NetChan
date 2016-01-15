@@ -51,7 +51,7 @@ namespace NetChan {
                 }
                 closed = true;
                 if (senders.Empty && items.Empty && !receivers.Empty) {
-                    // wait up the waiting recievers
+                    // wait up the waiting receivers
                     int count = 0;
                     for (var r = receivers.First; r != null; r = r.Next) {
                         if (r.Sync != null) {
@@ -77,7 +77,7 @@ namespace NetChan {
                     Waiter<T> wr = receivers.Dequeue();
                     if (wr != null) {
                         wr.Value = Maybe<T>.Some(v);
-                        Debug.Print("Thread {0}, {1} Send({2}), SetItem suceeded", Thread.CurrentThread.ManagedThreadId, GetType(), wr.Value);
+                        Debug.Print("Thread {0}, {1} Send({2}), SetItem succeeded", Thread.CurrentThread.ManagedThreadId, GetType(), wr.Value);
                         wr.Wakeup();
                         return;
                     }
@@ -91,7 +91,7 @@ namespace NetChan {
                 s = WaiterPool<T>.Get(v);
                 senders.Enqueue(s);
             }
-            // wait for the reciever to wake us up
+            // wait for the receiver to wake us up
             Debug.Print("Thread {0}, {1} Send({2}), waiting ", Thread.CurrentThread.ManagedThreadId, GetType(), v);
             s.WaitOne();
             Debug.Print("Thread {0}, {1} Send({2}), woke up after waiting ", Thread.CurrentThread.ManagedThreadId, GetType(), v);
@@ -304,7 +304,7 @@ namespace NetChan {
                     Waiter<T> wr = receivers.Dequeue();
                     if (wr != null) {
                         wr.Value = s.Value;
-                        Debug.Print("Thread {0}, {1} TrySend({2}), waking up reveiver", Thread.CurrentThread.ManagedThreadId, GetType(), wr.Value);
+                        Debug.Print("Thread {0}, {1} TrySend({2}), waking up receiver", Thread.CurrentThread.ManagedThreadId, GetType(), wr.Value);
                         wr.Wakeup();
                         return true;
                     }

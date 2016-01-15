@@ -5,7 +5,7 @@ using System.Diagnostics;
 using System.Threading;
 
 namespace NetChan {
-    /// <summary>Send and/or Recieve operations over many channels</summary>
+    /// <summary>Send and/or Receive operations over many channels</summary>
     public sealed class Channels : IDisposable {
         private readonly Random rand = new Random(Environment.TickCount);
         private readonly Op[] ops;
@@ -34,8 +34,12 @@ namespace NetChan {
             ops[i].Release();
         }
 
-        /// <summary>Blocking, non-deterministic send and/or recieve of many channels</summary>
+        /// <summary>Blocking, non-deterministic send and/or receive of many channels</summary>
         /// <returns>The index of the channel that was actioned</returns>
+        /// <remarks>
+        /// If more than one channel is ready then this method randomly selects one to accept, 
+        /// It DOES NOT choose based on declaration order
+        /// </remarks>
         public ISelected Select() {
             Shuffle(pollOrder);
             try {
@@ -91,8 +95,12 @@ namespace NetChan {
             return handleIdx[signalled];
         }
 
-        /// <summary>Non-blocking, non-deterministic send and/or recieve of many channels</summary>
+        /// <summary>Non-blocking, non-deterministic send and/or receive of many channels</summary>
         /// <returns>The index of the channel that was actioned, or -1 if no channels are ready</returns>
+        /// <remarks>
+        /// If more than one channel is ready then this method randomly selects one to accept, 
+        /// It DOES NOT choose based on declaration order
+        /// </remarks>
         public ISelected TrySelect() {
             Shuffle(pollOrder);
             foreach (int i in pollOrder) {
@@ -173,7 +181,7 @@ namespace NetChan {
             return new SendOp(chan);
         }
 
-        /// <summary>Creates a recieve operation on channel</summary>
+        /// <summary>Creates a receive operation on channel</summary>
         public static Op Recv(IChannel chan) {
             return new RecvOp(chan);
         }
@@ -209,7 +217,7 @@ namespace NetChan {
         }
 
         internal override void ResetWaiter(int i, Sync sync) {
-            Waiter.SetSync(sync); // dont call clear as this clear the value we are sending
+            Waiter.SetSync(sync); // don't call clear as this otherwise it will clear the value we are sending
             Waiter.Index = i;
         }
     }

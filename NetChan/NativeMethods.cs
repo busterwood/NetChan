@@ -4,6 +4,9 @@ using System.Security;
 
 namespace NetChan {
 
+    /// <remarks>
+    /// Used to improve performance by 10-20% based on my benchmarks
+    /// </remarks>
     [SuppressUnmanagedCodeSecurity]
     static class NativeMethods {
         [DllImport("Kernel32.dll", SetLastError=true)]
