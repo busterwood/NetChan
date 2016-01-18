@@ -19,17 +19,11 @@ namespace NetChan {
             tail = 0;
         }
 
-        public bool Empty {
-            get { return head == tail; }
-        }
+        public bool Empty => head == tail;
 
-        public bool Full {
-            get { return tail == head - 1 || (head == 0 && tail == arr.Length - 1); }
-        }
+        public bool Full => tail == head - 1 || (head == 0 && tail == arr.Length - 1);
 
-        public int Capacity {
-            get { return arr.Length-1; }
-        }
+        public int Capacity => arr.Length-1;
 
         public void Clear() {
             Array.Clear(arr, 0, arr.Length);
