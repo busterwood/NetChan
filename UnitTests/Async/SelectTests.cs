@@ -339,12 +339,12 @@ namespace NetChan.Async {
         }
 
         [Test]
-        [Timeout(4000)]
+        [Timeout(6000)]
         public void _2select_on_two_channels() {
             Benchmark.Go("select on two channels", (int runs) => {
                 Console.WriteLine("runs = " + runs);
-                var ch1 = new Channel<int>(100);
-                var ch2 = new Channel<int>(100);
+                var ch1 = new Channel<int>(1000);
+                var ch2 = new Channel<int>(1000);
                 int toSend = runs / 2;
                 Task.Run(() => {
                     for (int i = 0; i < toSend; i++) {
