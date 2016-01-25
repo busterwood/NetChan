@@ -343,7 +343,6 @@ namespace NetChan.Async {
         [Timeout(15000)]
         public void _2select_on_two_channels() {
             Benchmark.Go("select on two channels", (int runs) => {
-                Console.WriteLine("runs = " + runs);
                 var ch1 = new Channel<int>(1000);
                 var ch2 = new Channel<int>(1000);
                 int toSend = runs / 2;
@@ -351,13 +350,11 @@ namespace NetChan.Async {
                     for (int i = 0; i < toSend; i++) {
                         ch1.Send(i);
                     }
-                    Console.WriteLine("Wrote all to ch1");
                 });
                 Task.Run(() => {
                     for (int i = 0; i < toSend; i++) {
                         ch2.Send(i);
                     }
-                    Console.WriteLine("Wrote all to ch2");
                 });
                 int sum = 0;
                 int count = 0;
@@ -366,10 +363,6 @@ namespace NetChan.Async {
                 try {
                     for (int i = 0; i < max; i++) {
                         count++;
-                        if (runs > 1000 && count >= runs-4 && Debugger.IsAttached)
-                        {
-                            Debugger.Break();
-                        }
                         ISelected got = select.Select().Result;
                         if (got.Index < 0) {
                             Assert.IsTrue(got.Index >= 0);
@@ -379,7 +372,6 @@ namespace NetChan.Async {
                         if (val.IsNone) {
                             Assert.AreNotEqual(Maybe<int>.None(), got.Value);
                         }
-                        if (count > max-10) Console.WriteLine(count);
                         sum += val.Value;
                     }
                 } catch (Exception e) {
