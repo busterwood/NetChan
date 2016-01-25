@@ -24,40 +24,72 @@ namespace NetChan.Async {
             }
             return pollOrder;
         }
+        private void ResetPollOrder() {
+            for (int i = 0; i < pollOrder.Length; i++) {
+                pollOrder[i] = i;
+            }
+        }
 
         public void ClearAt(int i) {
             ops[i].Release();
         }
 
-        /// <summary>Blocking, non-deterministic send and/or receive of many channels</summary>
+        /// <summary>Send and/or receive of many channels</summary>
+        /// <returns>The index of the channel that was actioned</returns>
+        /// <remarks>
+        /// If more than one channel is ready then this method selects the one to accept, based on declaration order,
+        /// i.e. the first channel that is ready returns
+        /// </remarks>
+        public Task<ISelected> PriSelect()
+        {
+            ResetPollOrder();
+            return SelectCore();
+        }
+
+        private Task<ISelected> SelectCore()
+        {
+            var tcs = new TaskCompletionSource<int>();
+            var taskCount = 0;
+            foreach (int i in pollOrder)
+            {
+                if (ops[i].Chan == null)
+                {
+                    continue; // ignore null channels
+                }
+                ops[i].ResetWaiter(i, tcs);
+                if (ops[i].SendOrRecv())
+                {
+                    // can send or recv without waiting
+                    ISelected done = ops[i].Waiter;
+                    RemoveReceivers();
+                    return Task.FromResult(done);
+                }
+                taskCount++;
+            }
+            if (taskCount == 0)
+            {
+                throw new InvalidOperationException("All channels are null, select will block forever");
+            }
+            return SelectInternal(tcs.Task);
+        }
+
+        /// <summary>Non-deterministic send and/or receive of many channels</summary>
         /// <returns>The index of the channel that was actioned</returns>
         /// <remarks>
         /// If more than one channel is ready then this method randomly selects one to accept, 
         /// It DOES NOT choose based on declaration order
         /// </remarks>
         public Task<ISelected> Select() {
-            var tcs = new TaskCompletionSource<int>();
             Shuffle(pollOrder);
-            var taskCount = 0;
-            foreach (int i in pollOrder) {
-                if (ops[i].Chan == null) { 
-                    continue; // ignore null channels
-                }
-                ops[i].ResetWaiter(i, tcs);
-                if (ops[i].SendOrRecv()) {
-                    var done = Task.FromResult((ISelected)ops[i].Waiter); // can send or recv without waiting
-                    foreach (Op t in ops)
-                    {
-                        t.RemoveReceiver();
-                    }
-                    return done;
-                }
-                taskCount++;
+            return SelectCore();
+        }
+
+        private void RemoveReceivers()
+        {
+            foreach (Op t in ops)
+            {
+                t.RemoveReceiver();
             }
-            if (taskCount == 0) {
-                throw new InvalidOperationException("All channels are null, select will block forever");
-            }
-            return SelectInternal(tcs.Task);
         }
 
         private async Task<ISelected> SelectInternal(Task<int> task)
@@ -71,10 +103,7 @@ namespace NetChan.Async {
             }
             finally
             {
-                foreach (Op t in ops)
-                {
-                    t.RemoveReceiver();
-                }
+                RemoveReceivers();
             }
         }
 

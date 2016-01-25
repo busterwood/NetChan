@@ -13,8 +13,7 @@ namespace NetChan {
             code(1);
             
             // force a full GC before test, so any GCs that do happen are do to the code being run
-            GC.Collect();
-
+            GC.Collect();       
 
 	        // Run the benchmark for a single iteration in case it's expensive.
 	        int n = 1;

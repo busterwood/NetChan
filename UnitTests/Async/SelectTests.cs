@@ -378,7 +378,7 @@ namespace NetChan.Async {
                     Console.WriteLine(count + " " + e.Message);
                     throw;
                 }
-            });
+            }, 500);
         }
 
         [Test]
