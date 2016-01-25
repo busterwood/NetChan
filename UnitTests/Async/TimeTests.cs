@@ -3,7 +3,7 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 
-namespace NetChan {
+namespace NetChan.Async {
 
     [TestFixture]
     public class TimeTests {
