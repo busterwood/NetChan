@@ -60,18 +60,40 @@ namespace NetChan.Async
         public void waitany_handles_only_one_event()
         {
             var evts = new [] { new AsyncAutoResetEvent(), new AsyncAutoResetEvent(), new AsyncAutoResetEvent()};
-
-            var sync = new Sync();
-            Task<int> task = AsyncAutoResetEvent.WaitAny(evts, sync);
+            Task<int> wait = AsyncAutoResetEvent.WaitAny(evts, new TaskCompletionSource<int>());
             evts[1].Set();
             evts[2].Set();
             evts[0].Set();
-            Assert.AreEqual(1, task.Result);
-            Assert.AreEqual(sync.Value, task.Result);
+            Assert.AreEqual(1, wait.Result);
 
-            Assert.IsTrue(evts[0].WaitAsync().IsCompleted, $"expected task 0 to complete immediately as it was set to signalled above");
-            Assert.IsFalse(evts[1].WaitAsync().IsCompleted, $"epxected task 1 to wait as it was set by waitany");
-            Assert.IsTrue(evts[2].WaitAsync().IsCompleted, $"expected task 2 to complete immediately as it was set to signalled above");
+            for (int i = 0; i < evts.Length; i++) {
+                if (i == wait.Result)
+                    Assert.IsFalse(evts[i].WaitAsync().IsCompleted, $"expected task {i} to wait as it was set by waitany");
+                else
+                    Assert.IsTrue(evts[i].WaitAsync().IsCompleted, $"expected task {i} to complete immediately as it was set to signalled above");
+            }
+        }
+
+        [Test, Timeout(1000)]
+        public void waitany_handles_only_one_event_randomized()
+        {
+            var evts = new[] { new AsyncAutoResetEvent(), new AsyncAutoResetEvent() };
+            Task<int> wait = AsyncAutoResetEvent.WaitAny(evts, new TaskCompletionSource<int>());
+            var all = new Task[evts.Length];
+            for (int i = 0; i < evts.Length; i++)
+            {
+                var e = evts[i];
+                all[i] = Task.Run(() => e.Set());
+            }
+            int res = wait.Result; // blocks
+            Task.WaitAll(all);
+
+            for (int i = 0; i < evts.Length; i++) {
+                if (i == res)
+                    Assert.IsFalse(evts[i].WaitAsync().IsCompleted, $"expected task {i} to wait as it was set by waitany");
+                else
+                    Assert.IsTrue(evts[i].WaitAsync().IsCompleted, $"expected task {i} to complete immediately as it was set to signalled above");
+            }
         }
 
         [Test, Timeout(1000)]
@@ -82,14 +104,16 @@ namespace NetChan.Async
                 e.Set();
             }
 
-            var sync = new Sync();
-            Task<int> task = AsyncAutoResetEvent.WaitAny(evts, sync);
-            Assert.AreEqual(0, task.Result);
-            Assert.AreEqual(sync.Value, task.Result);
+            Task<int> wait = AsyncAutoResetEvent.WaitAny(evts, new TaskCompletionSource<int>());
+            Assert.AreEqual(0, wait.Result);
 
-            Assert.IsFalse(evts[0].WaitAsync().IsCompleted, $"epxected task 0 to wait as it was set by waitany");
-            Assert.IsTrue(evts[1].WaitAsync().IsCompleted, $"expected task 1 to complete immediately as it was set to signalled above");
-            Assert.IsTrue(evts[2].WaitAsync().IsCompleted, $"expected task 2 to complete immediately as it was set to signalled above");
+            for (int i = 0; i < evts.Length; i++)
+            {
+                if (i == wait.Result)
+                    Assert.IsFalse(evts[i].WaitAsync().IsCompleted, $"expected task {i} to wait as it was set by waitany");
+                else
+                    Assert.IsTrue(evts[i].WaitAsync().IsCompleted, $"expected task {i} to complete immediately as it was set to signalled above");
+            }
         }
 
         [Test, Timeout(1000)]
@@ -97,11 +121,9 @@ namespace NetChan.Async
         {
             var evts = new [] { new AsyncAutoResetEvent(), new AsyncAutoResetEvent(), new AsyncAutoResetEvent()};
 
-            var sync = new Sync();
-            Task<int> task = AsyncAutoResetEvent.WaitAny(evts, sync);
+            Task<int> task = AsyncAutoResetEvent.WaitAny(evts, new TaskCompletionSource<int>());
             evts[1].Set();
             Assert.AreEqual(1, task.Result);
-            Assert.AreEqual(sync.Value, task.Result);
 
             // check other events still work
             for (int i = 0; i < evts.Length; i++) {

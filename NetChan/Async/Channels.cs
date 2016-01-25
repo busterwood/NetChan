@@ -11,14 +11,14 @@ namespace NetChan.Async {
         private readonly Random rand = new Random(Environment.TickCount);
         private readonly Op[] ops;
         private readonly int[] pollOrder;
-        private Task[] tasks;
+        private AsyncAutoResetEvent[] events;
         private int[] taskIdx;
         //private readonly Sync sync;
 
         public Channels(params Op[] ops) {
             this.ops = ops;
             pollOrder = CreatePollOrder(ops.Length);
-            tasks = new Task[ops.Length];
+            events = new AsyncAutoResetEvent[ops.Length];
             taskIdx = new int[ops.Length];
         }
 
@@ -41,7 +41,7 @@ namespace NetChan.Async {
         /// It DOES NOT choose based on declaration order
         /// </remarks>
         public async Task<ISelected> Select() {
-            var sync = new Sync();
+            var tcs = new TaskCompletionSource<int>();
             Shuffle(pollOrder);
             try {
                 var taskCount = 0;
@@ -50,7 +50,7 @@ namespace NetChan.Async {
                         //Debug.Print("Thread {0}, {1} Select: channel {2} is closed", Thread.CurrentThread.ManagedThreadId, GetType(), i);
                         continue;
                     }
-                    ops[i].ResetWaiter(i, sync);
+                    ops[i].ResetWaiter(i, tcs);
                     //Debug.Print("Thread {0}, {1} Select: Seeing if index {2} is ready", Thread.CurrentThread.ManagedThreadId, GetType(), i);               
                     if (ops[i].Blocking()) {
                         //Debug.Print("Thread {0}, {1} Select: returned index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
@@ -63,28 +63,23 @@ namespace NetChan.Async {
                     throw new InvalidOperationException("All channels are null, select will block forever");
                 }
                 //Debug.Print("Thread {0}, {1} Select, must wait", Thread.CurrentThread.ManagedThreadId, GetType());
-                int sig = await WaitForSignal(taskCount);
+                int sig = await WaitForSignal(taskCount, tcs);
                 //Debug.Print("Thread {0}, {1} Select, sync Value, idx {2}", Thread.CurrentThread.ManagedThreadId, GetType(), sig);
-                if (sig != sync.Value)
-                {
-                    Debugger.Break();
-                    
-                }
                 return ops[sig].Waiter;
             } finally {
                 // release waiters otherwise slow channels will build up
                 foreach (Op t in ops) {
                     t.RemoveReceiver();
                 }
-                Array.Clear(tasks, 0, tasks.Length);
+                Array.Clear(events, 0, events.Length);
                 Array.Clear(taskIdx, 0, taskIdx.Length);
             }
         }
 
-        private async Task<int> WaitForSignal(int taskCount) {
-            // collect the tasks into an array we can pass to WaitAny
-            if (taskCount < tasks.Length) {
-                tasks = new Task[taskCount];
+        private async Task<int> WaitForSignal(int taskCount, TaskCompletionSource<int> tcs) {
+            // collect the events into an array we can pass to WaitAny
+            if (taskCount < events.Length) {
+                events = new AsyncAutoResetEvent[taskCount];
                 taskIdx = new int[taskCount];                
             }
             taskCount = 0;
@@ -92,12 +87,12 @@ namespace NetChan.Async {
                 if (ops[i].Waiter == null) {
                     continue;
                 }
-                tasks[taskCount] = ops[i].Waiter.Event.WaitAsync();
+                events[taskCount] = ops[i].Waiter.Event;
                 taskIdx[taskCount] = i;
                 taskCount++;
             }
-            Debug.Print("Thread {0}, {1} WaitForSignal, there are {2} wait tasks", Thread.CurrentThread.ManagedThreadId, GetType(), tasks.Length);
-            int signalled = Array.IndexOf(tasks, await Task.WhenAny(tasks));
+            Debug.Print("Thread {0}, {1} WaitForSignal, there are {2} wait events", Thread.CurrentThread.ManagedThreadId, GetType(), events.Length);
+            int signalled = await AsyncAutoResetEvent.WaitAny(events, tcs);
             Debug.Print("Thread {0}, {1} WaitForSignal, woke up after WaitAny", Thread.CurrentThread.ManagedThreadId, GetType());
             return taskIdx[signalled];
         }
@@ -125,7 +120,7 @@ namespace NetChan.Async {
         }
 
         /// <summary>Modern version of the Fisher-Yates shuffle</summary>
-        private void Shuffle<T>(T[] array) {
+        internal void Shuffle<T>(T[] array) {
             for (int i = array.Length-1; i > 0; i--) {
                 int j = rand.Next(i+1);
                 if (j != i)
@@ -158,7 +153,7 @@ namespace NetChan.Async {
             internal set { chan = value; }
         }
 
-        internal abstract void ResetWaiter(int i, Sync sync);
+        internal abstract void ResetWaiter(int i, TaskCompletionSource<int> sync);
 
         internal void Release() {
             Waiter = null;
@@ -200,7 +195,7 @@ namespace NetChan.Async {
             return Chan.TryRecv(Waiter);
         }
 
-        internal override void ResetWaiter(int i, Sync sync) {
+        internal override void ResetWaiter(int i, TaskCompletionSource<int> sync) {
             Waiter.Clear(sync);
             Waiter.Index = i;
         }
@@ -219,7 +214,7 @@ namespace NetChan.Async {
             return Chan.TrySend(Waiter);
         }
 
-        internal override void ResetWaiter(int i, Sync sync) {
+        internal override void ResetWaiter(int i, TaskCompletionSource<int> sync) {
             Waiter.SetSync(sync); // don't call clear as this otherwise it will clear the value we are sending
             Waiter.Index = i;
         }

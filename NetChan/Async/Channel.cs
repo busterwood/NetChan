@@ -53,7 +53,6 @@ namespace NetChan.Async {
                     // wait up the waiting receivers
                     int count = 0;
                     for (var r = receivers.First; r != null; r = r.Next) {
-                        r.Sync.TrySet(-1);
                         r.Wakeup();
                         count++;
                     }
@@ -70,14 +69,15 @@ namespace NetChan.Async {
                 if (closed) {
                     throw new ClosedChannelException("You cannot send on a closed Channel");
                 }
-                if (items.Empty) {
+                while (!items.Empty) {
                     Waiter<T> wr = receivers.Dequeue();
-                    if (wr != null) {
-                        wr.Value = Maybe<T>.Some(v);
+                    wr.Value = Maybe<T>.Some(v);
+                    if (wr.TrySetCompletionSource()) {
                         //Debug.Print("Thread {0}, {1} Send({2}), SetItem succeeded", Thread.CurrentThread.ManagedThreadId, GetType(), wr.Value);
-                        wr.Wakeup();
                         return;
                     }
+                    wr.Wakeup();
+                    return;
                 }
                 if (!items.Full) {
                     //Debug.Print("Thread {0}, {1} Send({2}), spare capacity, adding to items", Thread.CurrentThread.ManagedThreadId, GetType(), v);
@@ -213,13 +213,13 @@ namespace NetChan.Async {
         bool IChannel.Recv(IWaiter w) {
             var r = (Waiter<T>)w;
             lock (sync) {
-                if (!items.Empty && r.TrySet()) {
+                if (!items.Empty && r.TrySetCompletionSource()) {
                     r.Value = Maybe<T>.Some(items.Dequeue());
                     //Debug.Print("Thread {0}, {1} IChannel.Recv, removed {2} from items", Thread.CurrentThread.ManagedThreadId, GetType(), r.Value);
                     MoveSendQToitems();
                     return true;                
                 }
-                if (senders.First != null && r.TrySet()) {
+                if (senders.First != null && r.TrySetCompletionSource()) {
                     Waiter<T> s = senders.Dequeue();
                     if (s != null) {
                         //Debug.Print("Thread {0}, {1} IChannel.Recv, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());

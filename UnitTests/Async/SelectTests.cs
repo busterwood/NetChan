@@ -74,18 +74,44 @@ namespace NetChan.Async {
 
         [Test]
         [Timeout(500)]
+        public void shuffle_two_items_can_change_order()
+        {
+            var idx = new[] {0, 1};
+            var select = new Channels();
+            var counts = new int[idx.Length];
+            for (int i = 0; i < 1000; i++)
+            {
+                idx[0] = 0;
+                idx[1] = 1;
+                select.Shuffle(idx);
+                if (idx[0] == 0) {
+                    Assert.AreEqual(1, idx[1]);
+                    counts[0]++;
+                }
+                else {
+                    Assert.AreEqual(0, idx[1]);
+                    counts[1]++;
+                }
+            }
+            Assert.AreNotEqual(0, counts[0], "idx[0] == 0");
+            Assert.AreNotEqual(0, counts[1], "idx[0] == 1");
+        }
+
+        [Test]
+        [Timeout(500)]
         public void can_select_on_open_and_closed_Channels() {
             var ch1 = new Channel<int>();
             var ch2 = new Channel<bool>();
             Task.Run(() =>
             {
                 ch1.Close();
-                ch2.Send(true);
+                ch2.Send(true).Wait();
             });
             var select = new Channels(Op.Recv(ch1), Op.Recv(ch2));
             var gotTrue = false;
             while (!gotTrue) {
                 var got = select.Select().Result;
+                Thread.Sleep(0); // yield otherwise this thread spins too quickly
                 if (got.Index == 1) {
                     Assert.AreEqual(true, got.Value);
                     Assert.AreEqual(false, gotTrue);
@@ -98,6 +124,7 @@ namespace NetChan.Async {
         }
 
         [Test]
+        [Timeout(500)]
         public void can_select_on_Channels_closed_by_another_thread() {
             var ch1 = new Channel<int>();
             var ch2 = new Channel<bool>();
@@ -209,11 +236,11 @@ namespace NetChan.Async {
                 for (int i = 0; i < runs; i++) {
                     ISelected got = select.Select().Result;
                     if (got.Index != 0) {
-                        Assert.AreEqual(0, got.Index);
+                        Assert.AreEqual(0, got.Index, "index");
                     }
                     var gotInt = (ISelected<int>) got;
                     if (gotInt.Value.Value != i) {
-                        Assert.AreEqual(Maybe<int>.Some(i), got.Value);
+                        Assert.AreEqual(Maybe<int>.Some(i), got.Value, $"value of item {i}");
                     }
                 }
             });
