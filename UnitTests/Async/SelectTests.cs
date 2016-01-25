@@ -98,7 +98,7 @@ namespace NetChan.Async {
         }
 
         [Test]
-        [Timeout(500)]
+        [Timeout(1000)]
         public void can_select_on_open_and_closed_Channels() {
             var ch1 = new Channel<int>();
             var ch2 = new Channel<bool>();
@@ -223,7 +223,7 @@ namespace NetChan.Async {
             ch1.Close();
         }
 
-        [Test, Timeout(5000)]
+        [Test, Timeout(10000)]
         public void z0_send_and_select_many_items_from_channel() {
             Benchmark.Go("unbuffered select", (int runs) => {
                 var data = new Channel<int>();
@@ -246,7 +246,7 @@ namespace NetChan.Async {
             });
         }
 
-        [Test, Timeout(4000)]
+        [Test, Timeout(10000)]
         public void z1_send_and_select_many_items_from_queued_channel() {
             Benchmark.Go("select on buffer of 1", (int runs) => {
                 var data = new Channel<int>(10);
@@ -269,7 +269,7 @@ namespace NetChan.Async {
             });
         }
 
-        [Test, Timeout(5000)]
+        [Test, Timeout(10000)]
         public void z10_send_and_select_many_items_from_queued_channel() {
             Benchmark.Go("select on buffer of 10", (int runs) => {
                 var data = new Channel<int>(10);
@@ -293,7 +293,7 @@ namespace NetChan.Async {
         }
 
         [Test]
-        //[Timeout(3000)]
+        [Timeout(10000)]
         public void z100_send_and_select_many_items_from_queued_channel() {
             Benchmark.Go("select on buffer of 100", (int runs) => {
                 var data = new Channel<int>(100);
@@ -316,7 +316,7 @@ namespace NetChan.Async {
             });
         }
 
-        [Test, Timeout(3000)]
+        [Test, Timeout(10000)]
         public void z1000_send_and_select_many_items_from_queued_channel() {
             Benchmark.Go("select on buffer of 1000", (int runs) => {
                 var data = new Channel<int>(1000);
@@ -340,7 +340,7 @@ namespace NetChan.Async {
         }
 
         [Test]
-        [Timeout(15000)]
+        [Timeout(20000)]
         public void _2select_on_two_channels() {
             Benchmark.Go("select on two channels", (int runs) => {
                 var ch1 = new Channel<int>(1000);

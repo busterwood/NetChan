@@ -35,35 +35,44 @@ namespace NetChan.Async {
         /// If more than one channel is ready then this method randomly selects one to accept, 
         /// It DOES NOT choose based on declaration order
         /// </remarks>
-        public async Task<ISelected> Select() {
+        public Task<ISelected> Select() {
             var tcs = new TaskCompletionSource<int>();
             Shuffle(pollOrder);
-            try {
-                var taskCount = 0;
-                foreach (int i in pollOrder) {
-                    if (ops[i].Chan == null) {
-                        //Debug.Print("Thread {0}, {1} Select: channel {2} is closed", Thread.CurrentThread.ManagedThreadId, GetType(), i);
-                        continue;
-                    }
-                    ops[i].ResetWaiter(i, tcs);
-                    //Debug.Print("Thread {0}, {1} Select: Seeing if index {2} is ready", Thread.CurrentThread.ManagedThreadId, GetType(), i);               
-                    if (ops[i].SendOrRecv()) {
-                        //Debug.Print("Thread {0}, {1} Select: returned index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
-                        return ops[i].Waiter;
-                    }
-                    //Debug.Print("Thread {0}, {1} Select: will wait for index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
-                    taskCount++;
+            var taskCount = 0;
+            foreach (int i in pollOrder) {
+                if (ops[i].Chan == null) { 
+                    continue; // ignore null channels
                 }
-                if (taskCount == 0) {
-                    throw new InvalidOperationException("All channels are null, select will block forever");
+                ops[i].ResetWaiter(i, tcs);
+                if (ops[i].SendOrRecv()) {
+                    var done = Task.FromResult((ISelected)ops[i].Waiter); // can send or recv without waiting
+                    foreach (Op t in ops)
+                    {
+                        t.RemoveReceiver();
+                    }
+                    return done;
                 }
+                taskCount++;
+            }
+            if (taskCount == 0) {
+                throw new InvalidOperationException("All channels are null, select will block forever");
+            }
+            return SelectInternal(tcs.Task);
+        }
+
+        private async Task<ISelected> SelectInternal(Task<int> task)
+        {
+            try
+            {
                 //Debug.Print("Thread {0}, {1} Select, must wait", Thread.CurrentThread.ManagedThreadId, GetType());
-                int sig = await tcs.Task;
+                int sig = await task;
                 //Debug.Print("Thread {0}, {1} Select, sync Value, idx {2}", Thread.CurrentThread.ManagedThreadId, GetType(), sig);
                 return ops[sig].Waiter;
-            } finally {
-                // release waiters otherwise slow channels will build up
-                foreach (Op t in ops) {
+            }
+            finally
+            {
+                foreach (Op t in ops)
+                {
                     t.RemoveReceiver();
                 }
             }
