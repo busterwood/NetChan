@@ -45,7 +45,6 @@
     <Compile Include="ClosedChannelException.cs" />
     <Compile Include="Maybe.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Sync.cs" />
     <Compile Include="Async\Time.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
