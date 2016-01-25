@@ -47,7 +47,7 @@ namespace NetChan.Async {
                     }
                     ops[i].ResetWaiter(i, tcs);
                     //Debug.Print("Thread {0}, {1} Select: Seeing if index {2} is ready", Thread.CurrentThread.ManagedThreadId, GetType(), i);               
-                    if (ops[i].Blocking()) {
+                    if (ops[i].SendOrRecv()) {
                         //Debug.Print("Thread {0}, {1} Select: returned index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
                         return ops[i].Waiter;
                     }
@@ -84,7 +84,7 @@ namespace NetChan.Async {
                     continue;
                 }
                 ops[i].ResetWaiter(i, tcs);
-                if (ops[i].NonBlocking()) {
+                if (ops[i].TrySendOrRecv()) {
                     //Debug.Print("Thread {0}, {1} TrySelect: returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), ops[i].Waiter.Value, i);
                     return ops[i].Waiter;
                 }
@@ -140,10 +140,10 @@ namespace NetChan.Async {
         }
 
         /// <summary>Call the blocking version of the operation, i.e. Send or Recv</summary>
-        internal abstract bool Blocking();
+        internal abstract bool SendOrRecv();
 
         /// <summary>Call the non-blocking version of the operation, i.e. TrySend or TryRecv</summary>
-        internal abstract bool NonBlocking();
+        internal abstract bool TrySendOrRecv();
 
         /// <summary>Creates a send operation on channel</summary>
         public static Op Send(IChannel chan) {
@@ -159,12 +159,12 @@ namespace NetChan.Async {
     class RecvOp : Op {
         public RecvOp(IChannel chan) : base(chan) {}
 
-        internal override bool Blocking() {
+        internal override bool SendOrRecv() {
             //Debug.Print("Thread {0}, {1} Blocking: seeing is channel of {2} is ready", Thread.CurrentThread.ManagedThreadId, GetType(), Chan.GetType());
             return Chan.Recv(Waiter);
         }
 
-        internal override bool NonBlocking() {
+        internal override bool TrySendOrRecv() {
             return Chan.TryRecv(Waiter);
         }
 
@@ -178,12 +178,12 @@ namespace NetChan.Async {
     class SendOp : Op {
         public SendOp(IChannel chan) : base(chan) { }
 
-        internal override bool Blocking() {
+        internal override bool SendOrRecv() {
             Debug.Print("Thread {0}, {1} Blocking: seeing is channel of {2} is ready", Thread.CurrentThread.ManagedThreadId, GetType(), Chan.GetType());
             return Chan.Send(Waiter);
         }
 
-        internal override bool NonBlocking() {
+        internal override bool TrySendOrRecv() {
             return Chan.TrySend(Waiter);
         }
 

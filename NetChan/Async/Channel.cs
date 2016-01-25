@@ -92,7 +92,6 @@ namespace NetChan.Async {
                     return Complete.Instance;
                 }
                 // at capacity, queue our waiter until some capacity is freed up by a recv
-                //s = WaiterPool<T>.Get(v);
                 s = new Waiter<T> {Value = Maybe<T>.Some(v)};
                 senders.Enqueue(s);
             }
@@ -100,7 +99,6 @@ namespace NetChan.Async {
             //Debug.Print("Thread {0}, {1} Send({2}), about to wait", Thread.CurrentThread.ManagedThreadId, GetType(), v);
             return s.CompletionSource.Task;
             //Debug.Print("Thread {0}, {1} Send({2}), woke up after waiting ", Thread.CurrentThread.ManagedThreadId, GetType(), v);
-            //WaiterPool<T>.Put(s);
         }
 
         public bool TrySend(T v) {
