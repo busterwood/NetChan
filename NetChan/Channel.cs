@@ -54,9 +54,7 @@ namespace NetChan {
                     // wait up the waiting receivers
                     int count = 0;
                     for (var r = receivers.First; r != null; r = r.Next) {
-                        if (r.Sync != null) {
-                            r.Sync.TrySet();
-                        }
+                        r.TrySet();
                         r.Wakeup();
                         count++;
                     }
@@ -215,13 +213,13 @@ namespace NetChan {
         bool IChannel.Recv(IWaiter w) {
             var r = (Waiter<T>)w;
             lock (sync) {
-                if (!items.Empty && r.Sync.TrySet()) {
+                if (!items.Empty && r.TrySet()) {
                     r.Value = Maybe<T>.Some(items.Dequeue());
                     Debug.Print("Thread {0}, {1} RecvSelect, removed {2} from itemq", Thread.CurrentThread.ManagedThreadId, GetType(), r.Value);
                     MoveSendQToItemQ();
                     return true;                
                 }
-                if (senders.First != null && r.Sync.TrySet()) {
+                if (senders.First != null && r.TrySet()) {
                     Waiter<T> s = senders.Dequeue();
                     if (s != null) {
                         Debug.Print("Thread {0}, {1} RecvSelect, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());

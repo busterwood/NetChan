@@ -135,7 +135,9 @@ namespace NetChan.Async {
         public void send_blocks_when_capacity_reached_until_recv() {
             var ch = new Channel<bool>(1);
             var start = Environment.TickCount;
+#pragma warning disable 4014
             ReceiveTwiceWithWithDelay(ch);
+#pragma warning restore 4014
             ch.Send(true).Wait();
             ch.Send(true).Wait();
             var elapsed = Environment.TickCount - start;
@@ -150,13 +152,15 @@ namespace NetChan.Async {
             await ch.Recv();
         }
 
-        [Test, Timeout(5000)]
+        [Test, Timeout(3000)]
         public void z10_benchmark_send_and_receive() {
             Benchmark.Go("queue size 10", (int runs) => {
                 var data = new Channel<int>(100);
                 Task.Run(() => {
                     for (int i = 0; i < runs; i++) {
+#pragma warning disable 4014
                         data.Send(i);
+#pragma warning restore 4014
                     }
                 });
                 for (int i = 0; i < runs; i++) {
@@ -168,13 +172,15 @@ namespace NetChan.Async {
             });
         }
         
-        [Test, Timeout(5000)]
+        [Test, Timeout(3000)]
         public void z100_benchmark_send_and_receive() {
             Benchmark.Go("queue size 100", (int runs) => {
                 var data = new Channel<int>(100);
                 Task.Run(() => {
                     for (int i = 0; i < runs; i++) {
+#pragma warning disable 4014
                         data.Send(i);
+#pragma warning restore 4014
                     }
                 });
                 for (int i = 0; i < runs; i++) {
@@ -186,7 +192,7 @@ namespace NetChan.Async {
             });
         }
 
-        [Test, Timeout(5000)]
+        [Test, Timeout(4000)]
         public void z1000_benchmark_send_and_receive() {
             Benchmark.Go("queue size 1000", (int runs) => {
                 var data = new Channel<int>(1000);

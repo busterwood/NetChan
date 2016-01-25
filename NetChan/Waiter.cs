@@ -1,6 +1,7 @@
 ﻿// Copyright the Netchan authors, see LICENSE.txt for permitted use
 using System;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Threading;
 
 namespace NetChan {
@@ -45,6 +46,18 @@ namespace NetChan {
             index = -1;
         }
 
+        public bool TrySet()
+        {
+            //Debug.Assert(Sync != null && index == -1, "Expected sync and index to both be set");
+            if (Sync != null && index == -1)
+            {
+                if (Debugger.IsAttached)
+                    Debugger.Break();
+                throw new Exception("Expected sync and index to both be set");
+            }
+            return Sync.TrySet(index);
+        }
+
         int IWaiter.Index {
             get { return index; }
             set { index = value; }
@@ -71,13 +84,9 @@ namespace NetChan {
             set { Value = value == null ? Maybe<T>.None() : Maybe<T>.Some((T) value); }
         }
 
-        int ISelected.Index {
-            get { return index; }
-        }
+        int ISelected.Index => index;
 
-        IntPtr IWaiter.Event {
-            get { return Event; }
-        }
+        IntPtr IWaiter.Event => Event;
     }
 
     public interface IWaiter : ISelected {
@@ -94,16 +103,6 @@ namespace NetChan {
 
     public interface ISelected<T> : ISelected {
         new Maybe<T> Value { get; set; }
-    }
-
-    public class Sync {
-        const int Selecting = 0;
-        const int Done = 1;
-        public int Set;
-
-        public bool TrySet() {
-            return Interlocked.CompareExchange(ref Set, Done, Selecting) == Selecting;
-        }
     }
 
     class WaiterQ<T> {
@@ -135,10 +134,8 @@ namespace NetChan {
                     w.Next = null; // mark as removed
                 }
                 // if the waiter is part of a select and already signaled then ignore it
-                if (w.Sync != null) {
-                    if (!w.Sync.TrySet()) {
-                        continue;
-                    }
+                if (w.Sync != null && !w.TrySet()) {
+                    continue;
                 }
                 return w;
             }

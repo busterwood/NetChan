@@ -1,5 +1,6 @@
 ﻿// Copyright the Netchan authors, see LICENSE.txt for permitted use
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -10,15 +11,14 @@ namespace NetChan.Async {
         public Maybe<T> Value;   // the value that has been read (or the value being sent)
         public AsyncAutoResetEvent Event;
         public Waiter<T> Next;  // next item in a linked list (queue)
-        private int index;
+        private int index = -1;
 
         public Waiter() {
             Event = new AsyncAutoResetEvent();
         }
 
-        public Task WaitOne()
-        {
-            return Event.WaitAsync();
+        public Task WaitOne() {
+            return Event.WaitAsync(Sync, index);
         }
 
         public void Wakeup() {
@@ -30,6 +30,13 @@ namespace NetChan.Async {
             Value = Maybe<T>.None();
             Next = null;
             index = -1;
+        }
+
+        public bool TrySet() {
+            Debug.Assert(Sync != null && index == -1, "Expected sync and index to both be set");
+            bool wasSet = Sync.TrySet(index);
+            //if (wasSet) Debug.Print("Set sync index {0}", index);
+            return wasSet;
         }
 
         int IWaiter.Index {
@@ -60,21 +67,15 @@ namespace NetChan.Async {
 
         int ISelected.Index => index;
 
-        IntPtr IWaiter.Event {
-            get
-            {
-                throw new NotImplementedException();
-                //return Event;
-            }
-        }
+        AsyncAutoResetEvent IWaiter.Event => Event;
     }
 
-    //public interface IWaiter : ISelected {
-    //    new int Index { get; set; }
-    //    IntPtr Event { get; }
-    //    void Clear(Sync sync);
-    //    void SetSync(Sync sync);
-    //}
+    public interface IWaiter : ISelected {
+        new int Index { get; set; }
+        AsyncAutoResetEvent Event { get; }
+        void Clear(Sync sync);
+        void SetSync(Sync sync);
+    }
 
     //public interface ISelected {
     //    int Index { get; }
@@ -86,12 +87,12 @@ namespace NetChan.Async {
     //}
 
     //public class Sync {
-    //    const int Selecting = 0;
+    //    const int UnSet = 0;
     //    const int Done = 1;
-    //    public int Set;
+    //    public int Value;
 
     //    public bool TrySet() {
-    //        return Interlocked.CompareExchange(ref Set, Done, Selecting) == Selecting;
+    //        return Interlocked.CompareExchange(ref Value, Done, UnSet) == UnSet;
     //    }
     //}
 
@@ -124,10 +125,8 @@ namespace NetChan.Async {
                     w.Next = null; // mark as removed
                 }
                 // if the waiter is part of a select and already signaled then ignore it
-                if (w.Sync != null) {
-                    if (!w.Sync.TrySet()) {
-                        continue;
-                    }
+                if (w.Sync != null && !w.TrySet()) {
+                    continue;
                 }
                 return w;
             }

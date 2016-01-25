@@ -7,9 +7,11 @@ using System.Threading;
 using System.Threading.Tasks;
 
 namespace NetChan.Async {
-﻿
+
+    /// <summary>An CSP-like channel for communicating between threads.  </summary>﻿
+    /// <remarks>Supports 1-to-N, N-to-N and N-to-1 semantics</remarks>
     public sealed class Channel<T> : IChannel
-    { //, IEnumerable<T>
+    {
         private readonly object sync = new object();
         private readonly WaiterQ<T> receivers = new WaiterQ<T>();
         private readonly WaiterQ<T> senders = new WaiterQ<T>();
@@ -51,7 +53,7 @@ namespace NetChan.Async {
                     // wait up the waiting receivers
                     int count = 0;
                     for (var r = receivers.First; r != null; r = r.Next) {
-                        r.Sync?.TrySet();
+                        r.Sync.TrySet(-1);
                         r.Wakeup();
                         count++;
                     }
@@ -72,13 +74,13 @@ namespace NetChan.Async {
                     Waiter<T> wr = receivers.Dequeue();
                     if (wr != null) {
                         wr.Value = Maybe<T>.Some(v);
-                        Debug.Print("Thread {0}, {1} Send({2}), SetItem succeeded", Thread.CurrentThread.ManagedThreadId, GetType(), wr.Value);
+                        //Debug.Print("Thread {0}, {1} Send({2}), SetItem succeeded", Thread.CurrentThread.ManagedThreadId, GetType(), wr.Value);
                         wr.Wakeup();
                         return;
                     }
                 }
                 if (!items.Full) {
-                    Debug.Print("Thread {0}, {1} Send({2}), spare capacity, adding to items", Thread.CurrentThread.ManagedThreadId, GetType(), v);
+                    //Debug.Print("Thread {0}, {1} Send({2}), spare capacity, adding to items", Thread.CurrentThread.ManagedThreadId, GetType(), v);
                     items.Enqueue(v);
                     return;
                 }
@@ -88,9 +90,9 @@ namespace NetChan.Async {
                 senders.Enqueue(s);
             }
             // wait for the receiver to wake us up
-            Debug.Print("Thread {0}, {1} Send({2}), waiting ", Thread.CurrentThread.ManagedThreadId, GetType(), v);
+            //Debug.Print("Thread {0}, {1} Send({2}), about to wait", Thread.CurrentThread.ManagedThreadId, GetType(), v);
             await s.WaitOne();
-            Debug.Print("Thread {0}, {1} Send({2}), woke up after waiting ", Thread.CurrentThread.ManagedThreadId, GetType(), v);
+            //Debug.Print("Thread {0}, {1} Send({2}), woke up after waiting ", Thread.CurrentThread.ManagedThreadId, GetType(), v);
             //WaiterPool<T>.Put(s);
         }
 
@@ -125,7 +127,7 @@ namespace NetChan.Async {
                 if (!items.Empty) {
                     var value = items.Dequeue();
                     Debug.Print("Thread {0}, {1} Recv, removed item from items", Thread.CurrentThread.ManagedThreadId, GetType());
-                    MoveSendQToItemQ();
+                    MoveSendQToitems();
                     return Maybe<T>.Some(value);
                 }
                 Waiter<T> s = senders.Dequeue();
@@ -152,12 +154,12 @@ namespace NetChan.Async {
             return v;
         }
 
-        private void MoveSendQToItemQ() {
+        private void MoveSendQToitems() {
             if (!senders.Empty) {
                 Waiter<T> s = senders.Dequeue();
                 if (s != null) {
                     items.Enqueue(s.Value.Value);
-                    Debug.Print("Thread {0}, {1} MoveSendQToItemQ, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
+                    Debug.Print("Thread {0}, {1} MoveSendQToitems, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
                     s.Wakeup();
                 }
             }
@@ -168,7 +170,7 @@ namespace NetChan.Async {
             lock (sync) {
                 if (!items.Empty) {
                     var v = items.Dequeue();
-                    MoveSendQToItemQ();
+                    MoveSendQToitems();
                     return Maybe<T>.Some(v);
                 }
                 Waiter<T> s = senders.Dequeue();
@@ -181,6 +183,7 @@ namespace NetChan.Async {
                 return Maybe<T>.None();
             }
         }
+
 
         //public IEnumerator<T> GetEnumerator() {
         //    for (;;) {
@@ -202,26 +205,24 @@ namespace NetChan.Async {
 
         /// <summary>Gets a waiter for use in RecvSelect</summary>
         IWaiter IChannel.GetWaiter() {
-            return WaiterPool<T>.Get();
+            return new Waiter<T>();
         }
 
-        /// <summary>
-        /// Try to receive and value and write it <paramref name="w"/>. If it can be recieved straight away then it returns TRUE, 
-        /// else registers a waiting reciever and returns FALSE.
-        /// </summary>
+        /// <summary>Try to receive and value and write it <paramref name="w"/>.</summary>
+        /// <returns>If the operation can complete straight away then it returns TRUE, else registers a waiting reciever and returns FALSE.</returns>
         bool IChannel.Recv(IWaiter w) {
             var r = (Waiter<T>)w;
             lock (sync) {
-                if (!items.Empty && r.Sync.TrySet()) {
+                if (!items.Empty && r.TrySet()) {
                     r.Value = Maybe<T>.Some(items.Dequeue());
-                    Debug.Print("Thread {0}, {1} RecvSelect, removed {2} from itemq", Thread.CurrentThread.ManagedThreadId, GetType(), r.Value);
-                    MoveSendQToItemQ();
+                    //Debug.Print("Thread {0}, {1} IChannel.Recv, removed {2} from items", Thread.CurrentThread.ManagedThreadId, GetType(), r.Value);
+                    MoveSendQToitems();
                     return true;                
                 }
-                if (senders.First != null && r.Sync.TrySet()) {
+                if (senders.First != null && r.TrySet()) {
                     Waiter<T> s = senders.Dequeue();
                     if (s != null) {
-                        Debug.Print("Thread {0}, {1} RecvSelect, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
+                        //Debug.Print("Thread {0}, {1} IChannel.Recv, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
                         r.Value = s.Value;
                         s.Wakeup();
                         return true;
@@ -242,14 +243,14 @@ namespace NetChan.Async {
             lock (sync) {
                 if (!items.Empty) {
                     r.Value = Maybe<T>.Some(items.Dequeue());
-                    Debug.Print("Thread {0}, {1} TryRecvSelect, removed {2} from itemq", Thread.CurrentThread.ManagedThreadId, GetType(), r.Value);
-                    MoveSendQToItemQ();
+                    Debug.Print("Thread {0}, {1} IChannel.TryRecv, removed {2} from items", Thread.CurrentThread.ManagedThreadId, GetType(), r.Value);
+                    MoveSendQToitems();
                     return true;                    
                 }
                 if (!senders.Empty) {
                     Waiter<T> s = senders.Dequeue();
                     if (s != null) {
-                        Debug.Print("Thread {0}, {1} RecvSelect, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
+                        Debug.Print("Thread {0}, {1} IChannel.TryRecv, waking sender", Thread.CurrentThread.ManagedThreadId, GetType());
                         r.Value = s.Value;
                         s.Wakeup();
                         return true;
@@ -259,11 +260,13 @@ namespace NetChan.Async {
                     // closed channels return no value and dont block
                     return true;
                 }
-                Debug.Print("Thread {0}, {1} TryRecvSelect, itemq and sendq are empty", Thread.CurrentThread.ManagedThreadId, GetType());
+                Debug.Print("Thread {0}, {1} IChannel.TryRecv, items and senders are empty", Thread.CurrentThread.ManagedThreadId, GetType());
                 return false;
             }
         }
 
+        /// <summary>Try to send the value in <paramref name="w"/>.</summary>
+        /// <returns>If the operation can complete straight away then it returns TRUE, else registers a waiting sender and returns FALSE.</returns>
         bool IChannel.Send(IWaiter w) {
             var s = (Waiter<T>)w;
             Debug.Assert(s.Value.IsSome);
@@ -275,13 +278,13 @@ namespace NetChan.Async {
                     Waiter<T> wr = receivers.Dequeue();
                     if (wr != null) {
                         wr.Value = s.Value;
-                        Debug.Print("Thread {0}, {1} Send({2}), SetItem suceeded", Thread.CurrentThread.ManagedThreadId, GetType(), wr.Value);
+                        Debug.Print("Thread {0}, {1} IChannel.Send({2}), SetItem succeeded", Thread.CurrentThread.ManagedThreadId, GetType(), wr.Value);
                         wr.Wakeup();
                         return true;
                     }
                 }
                 if (!items.Full) {
-                    Debug.Print("Thread {0}, {1} Send({2}), spare capacity, adding to itemq", Thread.CurrentThread.ManagedThreadId, GetType(), s.Value.Value);
+                    Debug.Print("Thread {0}, {1} IChannel.Send({2}), spare capacity, adding to items", Thread.CurrentThread.ManagedThreadId, GetType(), s.Value.Value);
                     items.Enqueue(s.Value.Value);
                     return true;
                 }
@@ -291,7 +294,9 @@ namespace NetChan.Async {
             }
         }
 
-        bool IChannel.TrySend(IWaiter w) {
+        /// <summary>Try to send without blocking</summary>
+        bool IChannel.TrySend(IWaiter w)
+        {
             var s = (Waiter<T>) w;
             lock (sync) {
                 if (closed) {
@@ -301,13 +306,13 @@ namespace NetChan.Async {
                     Waiter<T> wr = receivers.Dequeue();
                     if (wr != null) {
                         wr.Value = s.Value;
-                        Debug.Print("Thread {0}, {1} TrySend({2}), waking up receiver", Thread.CurrentThread.ManagedThreadId, GetType(), wr.Value);
+                        Debug.Print("Thread {0}, {1} IChannel.TrySend({2}), waking up receiver", Thread.CurrentThread.ManagedThreadId, GetType(), wr.Value);
                         wr.Wakeup();
                         return true;
                     }
                 }
                 if (!items.Full) {
-                    Debug.Print("Thread {0}, {1} TrySend({2}), add item to queue", Thread.CurrentThread.ManagedThreadId, GetType(), s.Value.Value);
+                    Debug.Print("Thread {0}, {1} IChannel.TrySend({2}), add item to queue", Thread.CurrentThread.ManagedThreadId, GetType(), s.Value.Value);
                     items.Enqueue(s.Value.Value);
                     return true;
                 }
@@ -321,11 +326,8 @@ namespace NetChan.Async {
                 receivers.Remove(r);
             }
         }
-        void IChannel.ReleaseWaiter(IWaiter h) {
-            throw new NotImplementedException();
-            //WaiterPool<T>.Put((Waiter<T>)h);
-        }
-        
+      
+                
     }
 
 }

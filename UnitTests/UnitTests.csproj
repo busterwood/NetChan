@@ -42,7 +42,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Async\ChannelTests.cs" />
+    <Compile Include="Async\AsyncAutoResetEventTests.cs" />
     <Compile Include="Async\QueuedChannelTests.cs" />
+    <Compile Include="Async\SelectTests.cs" />
     <Compile Include="Benchmark.cs" />
     <Compile Include="ChannelTests.cs" />
     <Compile Include="CircularQueueTests.cs" />

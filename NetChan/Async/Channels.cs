@@ -3,23 +3,23 @@ using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Threading;
+using System.Threading.Tasks;
 
-namespace NetChan {
+namespace NetChan.Async {
     /// <summary>Send and/or Receive operations over many channels</summary>
-    public sealed class Channels : IDisposable {
+    public sealed class Channels {
         private readonly Random rand = new Random(Environment.TickCount);
         private readonly Op[] ops;
         private readonly int[] pollOrder;
-        private IntPtr[] handles;
-        private int[] handleIdx;
-        private readonly Sync sync;
+        private Task[] tasks;
+        private int[] taskIdx;
+        //private readonly Sync sync;
 
         public Channels(params Op[] ops) {
             this.ops = ops;
             pollOrder = CreatePollOrder(ops.Length);
-            handles = new IntPtr[ops.Length];
-            handleIdx = new int[ops.Length];
-            sync = new Sync();
+            tasks = new Task[ops.Length];
+            taskIdx = new int[ops.Length];
         }
 
         private static int[] CreatePollOrder(int size) {
@@ -40,59 +40,66 @@ namespace NetChan {
         /// If more than one channel is ready then this method randomly selects one to accept, 
         /// It DOES NOT choose based on declaration order
         /// </remarks>
-        public ISelected Select() {
+        public async Task<ISelected> Select() {
+            var sync = new Sync();
             Shuffle(pollOrder);
             try {
-                sync.Value = -1;
-                var handleCount = 0;
+                var taskCount = 0;
                 foreach (int i in pollOrder) {
                     if (ops[i].Chan == null) {
+                        //Debug.Print("Thread {0}, {1} Select: channel {2} is closed", Thread.CurrentThread.ManagedThreadId, GetType(), i);
                         continue;
                     }
                     ops[i].ResetWaiter(i, sync);
+                    //Debug.Print("Thread {0}, {1} Select: Seeing if index {2} is ready", Thread.CurrentThread.ManagedThreadId, GetType(), i);               
                     if (ops[i].Blocking()) {
-                        Debug.Print("Thread {0}, {1} Recv: RecvSelect returned index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
+                        //Debug.Print("Thread {0}, {1} Select: returned index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
                         return ops[i].Waiter;
                     }
-                    Debug.Print("Thread {0}, {1} Recv: RecvSelect waiting index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
-                    handleCount++;
+                    //Debug.Print("Thread {0}, {1} Select: will wait for index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
+                    taskCount++;
                 }
-                if (handleCount == 0) {
+                if (taskCount == 0) {
                     throw new InvalidOperationException("All channels are null, select will block forever");
                 }
-                int sig = WaitForSignal(handleCount);
-                Debug.Print("Thread {0}, {1} Recv, sync Value, idx {2}", Thread.CurrentThread.ManagedThreadId, GetType(), sig);
+                //Debug.Print("Thread {0}, {1} Select, must wait", Thread.CurrentThread.ManagedThreadId, GetType());
+                int sig = await WaitForSignal(taskCount);
+                //Debug.Print("Thread {0}, {1} Select, sync Value, idx {2}", Thread.CurrentThread.ManagedThreadId, GetType(), sig);
+                if (sig != sync.Value)
+                {
+                    Debugger.Break();
+                    
+                }
                 return ops[sig].Waiter;
             } finally {
                 // release waiters otherwise slow channels will build up
-                for (int i = 0; i < ops.Length; i++) {
-                    ops[i].RemoveReceiver();
+                foreach (Op t in ops) {
+                    t.RemoveReceiver();
                 }
-            }            
+                Array.Clear(tasks, 0, tasks.Length);
+                Array.Clear(taskIdx, 0, taskIdx.Length);
+            }
         }
 
-        private int WaitForSignal(int handleCount) {
-            // collect the handles into an array we can pass to WaitAny
-            if (handleCount < handles.Length) {
-                handles = new IntPtr[handleCount];
-                handleIdx = new int[handleCount];                
+        private async Task<int> WaitForSignal(int taskCount) {
+            // collect the tasks into an array we can pass to WaitAny
+            if (taskCount < tasks.Length) {
+                tasks = new Task[taskCount];
+                taskIdx = new int[taskCount];                
             }
-            handleCount = 0;
+            taskCount = 0;
             for (int i = 0; i < ops.Length; i++) {
                 if (ops[i].Waiter == null) {
                     continue;
                 }
-                handles[handleCount] = ops[i].Waiter.Event;
-                handleIdx[handleCount] = i;
-                handleCount++;
+                tasks[taskCount] = ops[i].Waiter.Event.WaitAsync();
+                taskIdx[taskCount] = i;
+                taskCount++;
             }
-            Debug.Print("Thread {0}, {1} Recv, there are {2} wait handles", Thread.CurrentThread.ManagedThreadId, GetType(), handles.Length);
-            int signalled = NativeMethods.WaitForMultipleObjects(handleCount, handles, false, -1);
-            if (signalled == -1) {
-                throw new Win32Exception();
-            }
-            Debug.Print("Thread {0}, {1} Recv, woke up after WaitAny", Thread.CurrentThread.ManagedThreadId, GetType());
-            return handleIdx[signalled];
+            Debug.Print("Thread {0}, {1} WaitForSignal, there are {2} wait tasks", Thread.CurrentThread.ManagedThreadId, GetType(), tasks.Length);
+            int signalled = Array.IndexOf(tasks, await Task.WhenAny(tasks));
+            Debug.Print("Thread {0}, {1} WaitForSignal, woke up after WaitAny", Thread.CurrentThread.ManagedThreadId, GetType());
+            return taskIdx[signalled];
         }
 
         /// <summary>Non-blocking, non-deterministic send and/or receive of many channels</summary>
@@ -105,12 +112,12 @@ namespace NetChan {
             Shuffle(pollOrder);
             foreach (int i in pollOrder) {
                 if (ops[i].Waiter == null) {
-                    Debug.Print("Thread {0}, {1} TryRecv: channel is null, index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
+                    Debug.Print("Thread {0}, {1} TrySelect: channel is null, index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
                     continue;
                 }
                 ops[i].ResetWaiter(i, null);
                 if (ops[i].NonBlocking()) {
-                    Debug.Print("Thread {0}, {1} TryRecv: TryRecvSelect returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), ops[i].Waiter.Value, i);
+                    Debug.Print("Thread {0}, {1} TrySelect: returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), ops[i].Waiter.Value, i);
                     return ops[i].Waiter;
                 }
             }
@@ -120,23 +127,18 @@ namespace NetChan {
         /// <summary>Modern version of the Fisher-Yates shuffle</summary>
         private void Shuffle<T>(T[] array) {
             for (int i = array.Length-1; i > 0; i--) {
-                int index = rand.Next(i);
-                // swap the values
-                var tmp = array[index];
-                array[index] = array[i];
-                array[i] = tmp;
+                int j = rand.Next(i+1);
+                if (j != i)
+                {
+                    // swap the values
+                    var tmp = array[j];
+                    array[j] = array[i];
+                    array[i] = tmp;
+                }
             }
         }
 
-        public void Dispose() {
-            for (int i = 0; i < ops.Length; i++) {
-                ops[i].Release();
-            }
-        }
-
-        public ISelected this[int i] {
-            get { return ops[i].Waiter; }
-        }
+        public ISelected this[int i] => ops[i].Waiter;
     }
 
     /// <summary>
@@ -148,7 +150,7 @@ namespace NetChan {
 
         protected Op(IChannel chan) {
             this.chan = chan;
-            Waiter = chan != null ? chan.GetWaiter() : null;
+            Waiter = chan?.GetWaiter();
         }
 
         public IChannel Chan {
@@ -159,10 +161,7 @@ namespace NetChan {
         internal abstract void ResetWaiter(int i, Sync sync);
 
         internal void Release() {
-            if (chan != null && Waiter != null) {
-                chan.ReleaseWaiter(Waiter);
-                Waiter = null;
-            }
+            Waiter = null;
             chan = null;
         }
 
@@ -172,8 +171,10 @@ namespace NetChan {
             }
         }
 
+        /// <summary>Call the blocking version of the operation, i.e. Send or Recv</summary>
         internal abstract bool Blocking();
 
+        /// <summary>Call the non-blocking version of the operation, i.e. TrySend or TryRecv</summary>
         internal abstract bool NonBlocking();
 
         /// <summary>Creates a send operation on channel</summary>
@@ -191,6 +192,7 @@ namespace NetChan {
         public RecvOp(IChannel chan) : base(chan) {}
 
         internal override bool Blocking() {
+            //Debug.Print("Thread {0}, {1} Blocking: seeing is channel of {2} is ready", Thread.CurrentThread.ManagedThreadId, GetType(), Chan.GetType());
             return Chan.Recv(Waiter);
         }
 
@@ -209,6 +211,7 @@ namespace NetChan {
         public SendOp(IChannel chan) : base(chan) { }
 
         internal override bool Blocking() {
+            Debug.Print("Thread {0}, {1} Blocking: seeing is channel of {2} is ready", Thread.CurrentThread.ManagedThreadId, GetType(), Chan.GetType());
             return Chan.Send(Waiter);
         }
 
@@ -225,9 +228,7 @@ namespace NetChan {
     internal class NotSelected : ISelected {
         public static readonly NotSelected Instance = new NotSelected();
 
-        public int Index {
-            get { return -1; }
-        }
+        public int Index => -1;
 
         public object Value {
             get { return null; }
