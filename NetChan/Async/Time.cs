@@ -2,7 +2,7 @@
 using System;
 using System.Threading;
 
-namespace NetChan {
+namespace NetChan.Async {
     public static class Time {
 
         public static Channel<DateTime> After(TimeSpan after) {

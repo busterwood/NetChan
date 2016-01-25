@@ -77,24 +77,14 @@ namespace NetChan.Async {
         void SetSync(Sync sync);
     }
 
-    //public interface ISelected {
-    //    int Index { get; }
-    //    object Value { get; set; }
-    //}
+    public interface ISelected {
+        int Index { get; }
+        object Value { get; set; }
+    }
 
-    //public interface ISelected<T> : ISelected {
-    //    new Maybe<T> Value { get; set; }
-    //}
-
-    //public class Sync {
-    //    const int UnSet = 0;
-    //    const int Done = 1;
-    //    public int Value;
-
-    //    public bool TrySet() {
-    //        return Interlocked.CompareExchange(ref Value, Done, UnSet) == UnSet;
-    //    }
-    //}
+    public interface ISelected<T> : ISelected {
+        new Maybe<T> Value { get; set; }
+    }
 
     class WaiterQ<T> {
         internal Waiter<T> First;
