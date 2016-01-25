@@ -80,12 +80,12 @@ namespace NetChan.Async {
             Shuffle(pollOrder);
             foreach (int i in pollOrder) {
                 if (ops[i].Waiter == null) {
-                    Debug.Print("Thread {0}, {1} TrySelect: channel is null, index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
+                    //Debug.Print("Thread {0}, {1} TrySelect: channel is null, index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
                     continue;
                 }
                 ops[i].ResetWaiter(i, tcs);
                 if (ops[i].NonBlocking()) {
-                    Debug.Print("Thread {0}, {1} TrySelect: returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), ops[i].Waiter.Value, i);
+                    //Debug.Print("Thread {0}, {1} TrySelect: returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), ops[i].Waiter.Value, i);
                     return ops[i].Waiter;
                 }
             }

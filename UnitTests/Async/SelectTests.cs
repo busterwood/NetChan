@@ -292,7 +292,8 @@ namespace NetChan.Async {
             });
         }
 
-        [Test, Timeout(3000)]
+        [Test]
+        //[Timeout(3000)]
         public void z100_send_and_select_many_items_from_queued_channel() {
             Benchmark.Go("select on buffer of 100", (int runs) => {
                 var data = new Channel<int>(100);
@@ -339,7 +340,7 @@ namespace NetChan.Async {
         }
 
         [Test]
-        [Timeout(6000)]
+        [Timeout(15000)]
         public void _2select_on_two_channels() {
             Benchmark.Go("select on two channels", (int runs) => {
                 Console.WriteLine("runs = " + runs);

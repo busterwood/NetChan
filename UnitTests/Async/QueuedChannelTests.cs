@@ -152,7 +152,7 @@ namespace NetChan.Async {
             await ch.Recv();
         }
 
-        [Test, Timeout(3000)]
+        [Test, Timeout(7000)]
         public void z10_benchmark_send_and_receive() {
             Benchmark.Go("queue size 10", (int runs) => {
                 var data = new Channel<int>(100);
@@ -172,7 +172,7 @@ namespace NetChan.Async {
             });
         }
         
-        [Test, Timeout(3000)]
+        [Test, Timeout(4000)]
         public void z100_benchmark_send_and_receive() {
             Benchmark.Go("queue size 100", (int runs) => {
                 var data = new Channel<int>(100);
