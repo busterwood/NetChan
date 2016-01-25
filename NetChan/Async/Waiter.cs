@@ -9,33 +9,21 @@ namespace NetChan.Async {
     internal class Waiter<T> : IWaiter, ISelected<T> {
         public TaskCompletionSource<int> CompletionSource;
         public Maybe<T> Value;   // the value that has been read (or the value being sent)
-        public AsyncAutoResetEvent Event;
         public Waiter<T> Next;  // next item in a linked list (queue)
         private int index = -1;
 
         public Waiter() {
-            Event = new AsyncAutoResetEvent();
+            CompletionSource = new TaskCompletionSource<int>();
         }
-
-        public Task WaitOne() {
-            return Event.WaitAsync();
-        }
-
-        public void Wakeup() {
-            Event.Set();
-        }
-
+        
         public void Clear() {
-            CompletionSource = null;
+            CompletionSource = new TaskCompletionSource<int>();
             Value = Maybe<T>.None();
             Next = null;
             index = -1;
         }
 
         public bool TrySetCompletionSource() {
-            if (CompletionSource == null) {
-                return true;
-            }
             return CompletionSource.TrySetResult(index);
         }
 
@@ -44,15 +32,15 @@ namespace NetChan.Async {
             set { index = value; }
         }
 
-        void IWaiter.Clear(TaskCompletionSource<int> sync) {
-            CompletionSource = sync;
+        void IWaiter.ClearValue() {
             Value = Maybe<T>.None();
-            Next = null;
         }
 
-        void IWaiter.SetSync(TaskCompletionSource<int> sync) {
-            CompletionSource = sync;
+        void IWaiter.SetCompletion(TaskCompletionSource<int> sync, int i) {
+            if (sync == null) throw new ArgumentNullException(nameof(sync));
+            index = i;
             Next = null;
+            CompletionSource = sync;
         }
 
         Maybe<T> ISelected<T>.Value {
@@ -67,14 +55,12 @@ namespace NetChan.Async {
 
         int ISelected.Index => index;
 
-        AsyncAutoResetEvent IWaiter.Event => Event;
     }
 
     public interface IWaiter : ISelected {
         new int Index { get; set; }
-        AsyncAutoResetEvent Event { get; }
-        void Clear(TaskCompletionSource<int> sync);
-        void SetSync(TaskCompletionSource<int> sync);
+        void SetCompletion(TaskCompletionSource<int> tcs, int i);
+        void ClearValue();
     }
 
     public interface ISelected {
@@ -115,7 +101,8 @@ namespace NetChan.Async {
                     w.Next = null; // mark as removed
                 }
                 //// if the waiter is part of a select and already signaled then ignore it
-                //if (!w.TrySetCompletionSource()) {
+                // TODO: can we do this here? 
+                // if (!w.TrySetCompletionSource()) {
                 //    continue;
                 //}
                 return w;

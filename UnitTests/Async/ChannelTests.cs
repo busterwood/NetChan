@@ -24,6 +24,7 @@ namespace NetChan.Async {
             Assert.IsTrue(elapsed > 100, "Elapsed " + elapsed);
         }
 
+        [Timeout(400)]
         [Test]
         public void recv_blocks_until_send() {
             var ch = new Channel<bool>(0);

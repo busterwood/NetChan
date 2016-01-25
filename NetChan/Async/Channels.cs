@@ -11,15 +11,10 @@ namespace NetChan.Async {
         private readonly Random rand = new Random(Environment.TickCount);
         private readonly Op[] ops;
         private readonly int[] pollOrder;
-        private AsyncAutoResetEvent[] events;
-        private int[] taskIdx;
-        //private readonly Sync sync;
 
         public Channels(params Op[] ops) {
             this.ops = ops;
             pollOrder = CreatePollOrder(ops.Length);
-            events = new AsyncAutoResetEvent[ops.Length];
-            taskIdx = new int[ops.Length];
         }
 
         private static int[] CreatePollOrder(int size) {
@@ -63,7 +58,7 @@ namespace NetChan.Async {
                     throw new InvalidOperationException("All channels are null, select will block forever");
                 }
                 //Debug.Print("Thread {0}, {1} Select, must wait", Thread.CurrentThread.ManagedThreadId, GetType());
-                int sig = await WaitForSignal(taskCount, tcs);
+                int sig = await tcs.Task;
                 //Debug.Print("Thread {0}, {1} Select, sync Value, idx {2}", Thread.CurrentThread.ManagedThreadId, GetType(), sig);
                 return ops[sig].Waiter;
             } finally {
@@ -71,30 +66,7 @@ namespace NetChan.Async {
                 foreach (Op t in ops) {
                     t.RemoveReceiver();
                 }
-                Array.Clear(events, 0, events.Length);
-                Array.Clear(taskIdx, 0, taskIdx.Length);
             }
-        }
-
-        private async Task<int> WaitForSignal(int taskCount, TaskCompletionSource<int> tcs) {
-            // collect the events into an array we can pass to WaitAny
-            if (taskCount < events.Length) {
-                events = new AsyncAutoResetEvent[taskCount];
-                taskIdx = new int[taskCount];                
-            }
-            taskCount = 0;
-            for (int i = 0; i < ops.Length; i++) {
-                if (ops[i].Waiter == null) {
-                    continue;
-                }
-                events[taskCount] = ops[i].Waiter.Event;
-                taskIdx[taskCount] = i;
-                taskCount++;
-            }
-            Debug.Print("Thread {0}, {1} WaitForSignal, there are {2} wait events", Thread.CurrentThread.ManagedThreadId, GetType(), events.Length);
-            int signalled = await AsyncAutoResetEvent.WaitAny(events, tcs);
-            Debug.Print("Thread {0}, {1} WaitForSignal, woke up after WaitAny", Thread.CurrentThread.ManagedThreadId, GetType());
-            return taskIdx[signalled];
         }
 
         /// <summary>Non-blocking, non-deterministic send and/or receive of many channels</summary>
@@ -104,13 +76,14 @@ namespace NetChan.Async {
         /// It DOES NOT choose based on declaration order
         /// </remarks>
         public ISelected TrySelect() {
+            var tcs = new TaskCompletionSource<int>();
             Shuffle(pollOrder);
             foreach (int i in pollOrder) {
                 if (ops[i].Waiter == null) {
                     Debug.Print("Thread {0}, {1} TrySelect: channel is null, index {2}", Thread.CurrentThread.ManagedThreadId, GetType(), i);
                     continue;
                 }
-                ops[i].ResetWaiter(i, null);
+                ops[i].ResetWaiter(i, tcs);
                 if (ops[i].NonBlocking()) {
                     Debug.Print("Thread {0}, {1} TrySelect: returned {2} index {3}", Thread.CurrentThread.ManagedThreadId, GetType(), ops[i].Waiter.Value, i);
                     return ops[i].Waiter;
@@ -196,8 +169,8 @@ namespace NetChan.Async {
         }
 
         internal override void ResetWaiter(int i, TaskCompletionSource<int> sync) {
-            Waiter.Clear(sync);
-            Waiter.Index = i;
+            Waiter.ClearValue();
+            Waiter.SetCompletion(sync, i);
         }
     }
 
@@ -215,8 +188,7 @@ namespace NetChan.Async {
         }
 
         internal override void ResetWaiter(int i, TaskCompletionSource<int> sync) {
-            Waiter.SetSync(sync); // don't call clear as this otherwise it will clear the value we are sending
-            Waiter.Index = i;
+            Waiter.SetCompletion(sync, i);
         }
     }
 
