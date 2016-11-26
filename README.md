@@ -1,5 +1,7 @@
 # NetChan
-Go-like channels for .NET
+Go-like channels for .NET.
+
+**WARNING** deprecated in favour of [BusterWood.Channels](https://github.com/busterwood/BusterWood.Channels)
 
 Calling `new Channel<T>()` creates an unbuffered Go channel, so can be used to synchronise threads.
 Calling `new Channel<T>(capacity)` creates an buffered channel with a fixed capacity queue of items.
